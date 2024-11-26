@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "853092354540",
+    "project_id": "admhelper-txoss",
+    "storage_bucket": "admhelper-txoss.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:853092354540:android:e8c0564ba8d588b8e018c9",
+        "android_client_info": {
+          "package_name": "com.teamxoss.admhelper"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA_2D8Wgp4hCR_cRPXcnnUejtJR3WDM3JQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
