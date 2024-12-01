@@ -7,6 +7,7 @@ import 'mcq.dart';
 import 'history.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:just_audio/just_audio.dart';
 class TimerScreen extends StatefulWidget {
   final int totalSeconds;
   final int mcqCount;
@@ -29,7 +30,7 @@ class _TimerScreenState extends State<TimerScreen> {
 
   late BannerAd _bannerAd;
   bool _isBannerAdLoaded = false;
-
+  final AudioPlayer _audioPlayer = AudioPlayer();
   @override
   void initState() {
     super.initState();
@@ -71,6 +72,7 @@ class _TimerScreenState extends State<TimerScreen> {
         timer.cancel();
         isTimerRunning = false;
         _vibrateEnd();
+        _playEndAlert();
         _showEndNotification();
       } else {
         setState(() {
@@ -78,6 +80,7 @@ class _TimerScreenState extends State<TimerScreen> {
         });
         if (remainingTime % (widget.totalSeconds ~/ widget.mcqCount) == 0) {
           _vibrateMcq();
+          _playMcqAlert();
         }
       }
       WakelockPlus.enable();
@@ -93,6 +96,28 @@ class _TimerScreenState extends State<TimerScreen> {
   void _vibrateEnd() async {
     if (await Vibration.hasVibrator() == true) {
       Vibration.vibrate(duration: 1000);
+    }
+  }
+
+  // Function to play the first alert sound when each MCQ milestone is reached
+  void _playMcqAlert() async {
+    // Play the first alert sound (you can replace it with your actual file path or asset)
+    try {
+      await _audioPlayer.setAsset('Asset/alert.mp3'); // Assuming the sound file is in your assets
+      _audioPlayer.play();
+    } catch (e) {
+      print("Error playing MCQ alert: $e");
+    }
+  }
+
+  // Function to play the second alert sound when the timer ends
+  void _playEndAlert() async {
+    // Play the second alert sound (you can replace it with your actual file path or asset)
+    try {
+      await _audioPlayer.setAsset('Asset/end.mp3'); // Assuming the sound file is in your assets
+      _audioPlayer.play();
+    } catch (e) {
+      print("Error playing end alert: $e");
     }
   }
 
@@ -260,6 +285,7 @@ class _TimerScreenState extends State<TimerScreen> {
     _bannerAd.dispose();
     timer.cancel();
     super.dispose();
+    _audioPlayer.dispose(); // Clean up the audio player when done
   }
 
   // **Confirm Finish Method Inside the State Class**

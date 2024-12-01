@@ -10,6 +10,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:csv/csv.dart';
 import 'package:pub_semver/pub_semver.dart';
+import 'package:flutter/foundation.dart';
 
 
 class HomeScreen extends StatefulWidget {
@@ -82,7 +83,14 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               Padding(
                 padding: EdgeInsets.fromLTRB(20, 5, 0, 0),
-                child: Text(
+                child: kIsWeb? Text(
+                  'Welcome to,\nAdmission Prep Helper',
+                  style: TextStyle(
+                    color: widget.isDarkMode ? Color(0xff66ffff) : Colors.black,
+                    fontSize: 32.0,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ) : Text(
                   'Welcome to,\nAdmission Prep Helper',
                   style: TextStyle(
                     color: widget.isDarkMode ? Colors.white : Colors.black,
@@ -233,7 +241,7 @@ class _HomeScreenState extends State<HomeScreen> {
               leading: Icon(Icons.favorite),
               title: Text('Support Us'),
               onTap: () async {
-                const url = 'https://appgrids-free-app-landing-page-template.vercel.app/#supportus'; // Replace with your actual support link
+                const url = 'https://admhelper.com/#supportus'; // Replace with your actual support link
                 if (await canLaunch(url)) {
                   await launch(url);
                 } else {

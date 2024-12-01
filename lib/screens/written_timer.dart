@@ -7,6 +7,7 @@ import 'written.dart'; // Assuming written.dart is your destination screen after
 import 'history.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:just_audio/just_audio.dart';
 class WrittenTimerScreen extends StatefulWidget {
   final int totalSeconds;
   final int writtenCount;
@@ -28,6 +29,7 @@ class _WrittenTimerScreenState extends State<WrittenTimerScreen> {
   late String totalTimeM;
   late BannerAd _bannerAd;
   bool _isBannerAdLoaded = false;
+  final AudioPlayer _audioPlayer = AudioPlayer();
   @override
   void initState() {
     super.initState();
@@ -68,6 +70,7 @@ class _WrittenTimerScreenState extends State<WrittenTimerScreen> {
         timer.cancel();
         isTimerRunning = false; // Update timer status
         _vibrateEnd();
+        _playEndAlert();
         _showEndNotification();
       } else {
         setState(() {
@@ -75,6 +78,7 @@ class _WrittenTimerScreenState extends State<WrittenTimerScreen> {
         });
         if (remainingTime % (widget.totalSeconds ~/ widget.writtenCount) == 0) {
           _vibrateWritten();
+          _playWrittenAlert();
         }
       }
       WakelockPlus.enable();
@@ -94,7 +98,26 @@ class _WrittenTimerScreenState extends State<WrittenTimerScreen> {
       Vibration.vibrate(duration: 1000); // Vibrate for 1 second
     }
   }
+  void _playWrittenAlert() async {
+    // Play the first alert sound (you can replace it with your actual file path or asset)
+    try {
+      await _audioPlayer.setAsset('Asset/alert.mp3'); // Assuming the sound file is in your assets
+      _audioPlayer.play();
+    } catch (e) {
+      print("Error playing MCQ alert: $e");
+    }
+  }
 
+  // Function to play the second alert sound when the timer ends
+  void _playEndAlert() async {
+    // Play the second alert sound (you can replace it with your actual file path or asset)
+    try {
+      await _audioPlayer.setAsset('Asset/end.mp3'); // Assuming the sound file is in your assets
+      _audioPlayer.play();
+    } catch (e) {
+      print("Error playing end alert: $e");
+    }
+  }
   // Show an alert when the timer ends
   void _showEndNotification() {
     showDialog(
@@ -301,6 +324,7 @@ class _WrittenTimerScreenState extends State<WrittenTimerScreen> {
     _bannerAd.dispose();
     timer.cancel();
     super.dispose();
+    _audioPlayer.dispose();
   }
 
   @override

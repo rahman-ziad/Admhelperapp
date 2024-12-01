@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:flutter/services.dart';
-
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ReminderScreen extends StatefulWidget {
@@ -21,6 +21,12 @@ class _ReminderScreenState extends State<ReminderScreen> with SingleTickerProvid
   bool isLoadingExam = true;
   bool isLoadingReg = true;
   bool isLoadingResult = true;
+  late NativeAd nativeAd;
+  bool isNativeAdLoaded = false;
+  late NativeAd nativeAd1;
+  bool isNativeAdLoaded1 = false;
+  late NativeAd nativeAd2;
+  bool isNativeAdLoaded2 = false;
 
   @override
   void initState() {
@@ -30,8 +36,67 @@ class _ReminderScreenState extends State<ReminderScreen> with SingleTickerProvid
     _loadUniversityData();  // Load exam date data
     _loadRegistrationData(); // Load registration data
     _loadResultData(); // Load result data
+    _loadNativeAd();
   }
+  void _loadNativeAd() {
+    nativeAd = NativeAd(
+      adUnitId: 'ca-app-pub-2413088365868094/2309147374', // Replace with your AdMob unit ID
+      listener: NativeAdListener(
+        onAdLoaded: (ad) {
+          setState(() {
+            isNativeAdLoaded = true;
+          });
+        },
+        onAdFailedToLoad: (ad, error) {
+          print('Native Ad Failed to Load: $error');
+          ad.dispose();
+        },
+      ),
+        request: const AdRequest(),
+        nativeTemplateStyle: NativeTemplateStyle(templateType: TemplateType.small));
+    nativeAd!.load();
 
+    nativeAd1 = NativeAd(
+        adUnitId: 'ca-app-pub-2413088365868094/5793930966', // Replace with your AdMob unit ID
+        listener: NativeAdListener(
+          onAdLoaded: (ad) {
+            setState(() {
+              isNativeAdLoaded1 = true;
+            });
+          },
+          onAdFailedToLoad: (ad, error) {
+            print('Native Ad 1 Failed to Load: $error');
+            ad.dispose();
+          },
+        ),
+        request: const AdRequest(),
+        nativeTemplateStyle: NativeTemplateStyle(templateType: TemplateType.small));
+    nativeAd1!.load();
+
+    nativeAd2 = NativeAd(
+        adUnitId: 'ca-app-pub-2413088365868094/4480849296', // Replace with your AdMob unit ID
+        listener: NativeAdListener(
+          onAdLoaded: (ad) {
+            setState(() {
+              isNativeAdLoaded2 = true;
+            });
+          },
+          onAdFailedToLoad: (ad, error) {
+            print('Native Ad 2 Failed to Load: $error');
+            ad.dispose();
+          },
+        ),
+        request: const AdRequest(),
+        nativeTemplateStyle: NativeTemplateStyle(templateType: TemplateType.small));
+    nativeAd2!.load();
+  }
+  @override
+  void dispose() {
+    nativeAd.dispose();
+    nativeAd1.dispose();
+    nativeAd2.dispose();
+    super.dispose();
+  }
   void _loadTheme() async {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
@@ -218,7 +283,7 @@ class _ReminderScreenState extends State<ReminderScreen> with SingleTickerProvid
       DateTime end = DateTime.parse(endDate);
       if (now.isBefore(start)) {
         return "Registration Not Started";
-      } else if (now.isBefore(end)) {
+      } else if (now.isBefore(end.add(Duration(days: 1)))) { // Include the end date
         return "Registration Ongoing";
       } else {
         return "Registration Closed";
@@ -282,9 +347,39 @@ class _ReminderScreenState extends State<ReminderScreen> with SingleTickerProvid
                     ? CircularProgressIndicator()
                     : universityData.isNotEmpty
                     ? ListView.builder(
-                  itemCount: universityData.length,
+                  itemCount: universityData.length + (isNativeAdLoaded ? 1: 0),
                   itemBuilder: (context, index) {
-                    final university = universityData[index];
+                    if (isNativeAdLoaded && index == 4) {
+                      return Container(
+                        height: 100, // Adjust height as per your design
+                        margin: EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
+                        decoration: BoxDecoration(
+                          color: Colors.white, // Background color (optional)
+                          borderRadius: BorderRadius.circular(12), // Rounded corners
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withOpacity(0.3),
+                              blurRadius: 4,
+                              offset: Offset(0, 4), // Shadow offset
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12), // Same as Container's borderRadius
+                          child: AdWidget(ad: nativeAd),
+                        ),
+                      );
+                    }
+
+
+                    // Adjust index for data list when ad is inserted
+
+                    final adjustedIndex =
+                    (isNativeAdLoaded && index > 4 && index < universityData.length + 1)
+                        ? index - 1
+                        : index;
+
+                    final university = universityData[adjustedIndex];
                     return Card(
                       margin: EdgeInsets.all(8.0),
                       elevation: 4,
@@ -364,9 +459,37 @@ class _ReminderScreenState extends State<ReminderScreen> with SingleTickerProvid
                     ? CircularProgressIndicator()
                     : registrationData.isNotEmpty
                     ? ListView.builder(
-                  itemCount: registrationData.length,
+                  itemCount: registrationData.length + (isNativeAdLoaded1 ? 1 : 0),
                   itemBuilder: (context, index) {
-                    final registration = registrationData[index];
+
+                    if (isNativeAdLoaded1 && index == 4) {
+                      return Container(
+                        height: 100, // Adjust height as per your design
+                        margin: EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
+                        decoration: BoxDecoration(
+                          color: Colors.white, // Background color (optional)
+                          borderRadius: BorderRadius.circular(12), // Rounded corners
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withOpacity(0.3),
+                              blurRadius: 4,
+                              offset: Offset(0, 4), // Shadow offset
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12), // Same as Container's borderRadius
+                          child: AdWidget(ad: nativeAd1),
+                        ),
+                      );
+                    }
+
+                    final adjustedIndex =
+                    (isNativeAdLoaded && index > 4 && index < registrationData.length + 1)
+                        ? index - 1
+                        : index;
+
+                    final registration = registrationData[adjustedIndex];
                     return Card(
                       margin: EdgeInsets.all(8.0),
                       elevation: 4,
@@ -450,9 +573,35 @@ class _ReminderScreenState extends State<ReminderScreen> with SingleTickerProvid
                     ? CircularProgressIndicator()
                     : resultData.isNotEmpty
                     ? ListView.builder(
-                  itemCount: resultData.length,
+                  itemCount: resultData.length + (isNativeAdLoaded2 ? 1:0),
                   itemBuilder: (context, index) {
-                    final result = resultData[index];
+                    if (isNativeAdLoaded2 && index == 4) {
+                      return Container(
+                        height: 100, // Adjust height as per your design
+                        margin: EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
+                        decoration: BoxDecoration(
+                          color: Colors.white, // Background color (optional)
+                          borderRadius: BorderRadius.circular(12), // Rounded corners
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withOpacity(0.3),
+                              blurRadius: 4,
+                              offset: Offset(0, 4), // Shadow offset
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12), // Same as Container's borderRadius
+                          child: AdWidget(ad: nativeAd2),
+                        ),
+                      );
+                    }
+                    final adjustedIndex =
+                    (isNativeAdLoaded && index > 4 && index < resultData.length + 1)
+                    ? index - 1
+                        : index;
+
+                    final result = resultData[adjustedIndex];
                     return Card(
                       margin: EdgeInsets.all(8.0),
                       elevation: 4,

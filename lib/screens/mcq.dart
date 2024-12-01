@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../screens/timer_screen.dart';
 import 'package:flutter/services.dart';
@@ -57,7 +58,92 @@ class _mcqscreenState extends State<mcqscreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(15),
               ),
-              child: Padding(
+              child: kIsWeb? Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: FractionallySizedBox(
+                  alignment: Alignment.center,
+                  widthFactor: 0.7, // 80% of the available width
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Enter number of MCQs',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: isDarkMode ? Colors.white : Colors.black,
+                        ),
+                      ),
+                      SizedBox(height: 10),
+                      GestureDetector(
+                        onTap: () => _showMcqPicker(context),
+                        child: AbsorbPointer(
+                          child: _buildElevatedTextField(
+                            context,
+                            isDarkMode,
+                                (value) {},
+                            initialValue: mcqCount,
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 20),
+                      Text(
+                        'Time for each MCQ',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: isDarkMode ? Colors.white : Colors.black,
+                        ),
+                      ),
+                      SizedBox(height: 10),
+                      GestureDetector(
+                        onTap: () => _showTimePicker(context),
+                        child: AbsorbPointer(
+                          child: _buildElevatedTextField(
+                            context,
+                            isDarkMode,
+                                (value) {},
+                            initialValue: '${selectedMinutes}m ${selectedSeconds}s',
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 20),
+                      ElevatedButton(
+                        onPressed: () {
+                          int mcqCountInt = int.tryParse(mcqCount) ?? 0;
+
+                          if (mcqCount.isEmpty || (selectedMinutes == 0 && selectedSeconds == 0)) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Please enter valid inputs.'),
+                              ),
+                            );
+                          } else {
+                            int timePerMcqInSeconds = (selectedMinutes * 60) + selectedSeconds;
+                            int totalSeconds = mcqCountInt * timePerMcqInSeconds;
+
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => TimerScreen(
+                                  totalSeconds: totalSeconds,
+                                  mcqCount: mcqCountInt,
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isDarkMode ? Color(0xff0a7075) : Color(0xFF0BC8EE),
+                          foregroundColor: Colors.white,
+                        ),
+                        child: Text('Start'),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+
+                  :
+              Padding(
                 padding: const EdgeInsets.all(20.0),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,

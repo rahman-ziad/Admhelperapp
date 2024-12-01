@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/cupertino.dart';
@@ -54,7 +55,88 @@ class _writtenscreenState extends State<writtenscreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(15),
               ),
-              child: Padding(
+              child: kIsWeb?Padding(
+                padding: const EdgeInsets.all(20.0), // Corrected this line
+                child: FractionallySizedBox(
+                  alignment: Alignment.center,
+                  widthFactor: 0.7, // 80% of the available width
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Enter number of Writtens',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: isDarkMode ? Colors.white : Colors.black,
+                        ),
+                      ),
+                      SizedBox(height: 10),
+                      GestureDetector(
+                        onTap: () => _showWrittenCountPicker(context),
+                        child: AbsorbPointer(
+                          child: _buildElevatedTextField(
+                            context,
+                            isDarkMode,
+                                (value) {},
+                            initialValue: writtenCount,
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 20),
+                      Text(
+                        'Time for each Written',
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: isDarkMode ? Colors.white : Colors.black,
+                        ),
+                      ),
+                      SizedBox(height: 10),
+                      GestureDetector(
+                        onTap: () => _showTimePicker(context),
+                        child: AbsorbPointer(
+                          child: _buildElevatedTextField(
+                            context,
+                            isDarkMode,
+                                (value) {},
+                            initialValue: '${selectedMinutes}m ${selectedSeconds}s',
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: 20),
+                      ElevatedButton(
+                        onPressed: () {
+                          if (writtenCount.isEmpty || (selectedMinutes == 0 && selectedSeconds == 0)) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Please enter valid inputs.'),
+                              ),
+                            );
+                          } else {
+                            int totalSeconds = (selectedMinutes * 60) + selectedSeconds;
+                            int writtenCountInt = int.parse(writtenCount);
+                            // Navigate to the written timer screen
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => WrittenTimerScreen(
+                                  totalSeconds: totalSeconds * writtenCountInt,
+                                  writtenCount: writtenCountInt,
+                                ),
+                              ),
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isDarkMode ? const Color(0xff0a7075) : const Color(0xFF0BC8EE),
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text('Start'),
+                      ),
+                    ],
+                  ),
+                ),
+              ) :
+              Padding(
                 padding: const EdgeInsets.all(20.0), // Corrected this line
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
