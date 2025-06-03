@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "853092354540",
-    "project_id": "admhelper-txoss",
-    "storage_bucket": "admhelper-txoss.firebasestorage.app"
+    "project_number": "429677270289",
+    "project_id": "sportsstation-8c081",
+    "storage_bucket": "sportsstation-8c081.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:853092354540:android:e8c0564ba8d588b8e018c9",
+        "mobilesdk_app_id": "1:429677270289:android:0787040544f42f4ec9e8b0",
         "android_client_info": {
-          "package_name": "com.teamxoss.admhelper"
+          "package_name": "com.teamx.sportsstation"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyA_2D8Wgp4hCR_cRPXcnnUejtJR3WDM3JQ"
+          "current_key": "AIzaSyCSmXI7Xl9gEjvwG0R-ljDVw0g1XUCBf6Q"
         }
       ],
       "services": {

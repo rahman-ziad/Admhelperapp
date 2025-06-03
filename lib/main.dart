@@ -1,57 +1,82 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import './screens/homescreen.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
-
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'screens/auth_wrapper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  MobileAds.instance.initialize();
-  runApp(MyApp());
+  await Firebase.initializeApp();
+  FlutterError.onError = (FlutterErrorDetails details) {
+    print('Flutter Error: ${details.exceptionAsString()}');
+    print(details.stack);
+  };
+  runApp(const ProviderScope(child: MyApp()));
 }
 
 class MyApp extends StatefulWidget {
+  const MyApp({super.key});
+
   @override
-  _MyAppState createState() => _MyAppState();
+  State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
-  bool isDarkMode = false; // Default to light theme
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  bool _isFirebaseInitialized = false;
 
   @override
   void initState() {
     super.initState();
-    _loadTheme();
+    WidgetsBinding.instance.addObserver(this);
+    _initializeFirebase();
   }
 
-  // Load the saved theme from shared preferences
-  void _loadTheme() async {
-    final prefs = await SharedPreferences.getInstance();
-    bool? savedTheme = prefs.getBool('isDarkMode');
-    setState(() {
-      isDarkMode = savedTheme ?? false; // Default to light theme if not set
-    });
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
-  // Save the current theme in shared preferences
-  void _saveTheme(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    prefs.setBool('isDarkMode', value);
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _initializeFirebase();
+    }
+  }
+
+  Future<void> _initializeFirebase() async {
+    try {
+      if (!_isFirebaseInitialized) {
+        await Firebase.initializeApp();
+        setState(() {
+          _isFirebaseInitialized = true;
+        });
+      }
+    } catch (e) {
+      print('Firebase initialization failed: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      theme: isDarkMode ? ThemeData.dark() : ThemeData.light(),
-      home: HomeScreen(
-        isDarkMode: isDarkMode,
-        onThemeChange: (bool value) {
-          setState(() {
-            isDarkMode = value;
-            _saveTheme(value);
-          });
-        },
+      title: 'SportsStation',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        cardTheme: const CardTheme(elevation: 2),
+        textTheme: const TextTheme(
+          headlineMedium: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          bodyMedium: TextStyle(fontSize: 16),
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue,
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+          ),
+        ),
       ),
+      home: _isFirebaseInitialized
+          ? const AuthWrapper()
+          : const Center(child: CircularProgressIndicator()),
     );
   }
 }

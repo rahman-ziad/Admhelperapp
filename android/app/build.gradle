@@ -1,5 +1,5 @@
-buildscript {
 
+buildscript {
     dependencies {
         classpath 'com.android.tools.build:gradle:7.3.1'
     }
@@ -7,16 +7,14 @@ buildscript {
 plugins {
     id "com.android.application"
     id "kotlin-android"
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id "dev.flutter.flutter-gradle-plugin"
     id 'com.google.gms.google-services'
 }
 
-
 android {
-    namespace = "com.teamxoss.admhelper" // Your package name here
-    compileSdkVersion  34
-    ndkVersion = "25.1.8937393"
+    namespace = "com.teamx.sportsstation"
+    compileSdkVersion 35
+    ndkVersion "28.0.13004108"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
@@ -28,16 +26,15 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.teamxoss.admhelper" // Your package name here
-        minSdkVersion  21
-        targetSdkVersion  34
-        versionCode = 3
-        versionName = "1.1.1"
+        applicationId = "com.teamx.sportsstation"
+        minSdkVersion 23
+        targetSdkVersion 35
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
     }
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
             signingConfig = signingConfigs.debug
         }
     }
