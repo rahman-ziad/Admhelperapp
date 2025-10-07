@@ -1816,6 +1816,14 @@ class _SearchPlayersScreenState extends State<SearchPlayersScreen> {
     });
   }
 
+  String _formatPhoneNumber(String? phoneNumber) {
+    if (phoneNumber == null || phoneNumber.length < 10) {
+      return 'No number';
+    }
+    // Take first 12 digits and append **
+    return '${phoneNumber.substring(0, phoneNumber.length > 12 ? 12 : phoneNumber.length)}**';
+  }
+
   @override
   Widget build(BuildContext context) {
     final sortedPlayers = [
@@ -1935,7 +1943,7 @@ class _SearchPlayersScreenState extends State<SearchPlayersScreen> {
                     style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                   subtitle: Text(
-                    player['phone_number'] ?? 'No number',
+                    _formatPhoneNumber(player['phone_number']),
                     style: const TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                   trailing: Checkbox(
