@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'edit_table_screen.dart';
-import 'home_screen.dart'; // Import the EditTableScreen
+import 'home_screen.dart';
 
 class ProfileSetupScreen extends ConsumerStatefulWidget {
   const ProfileSetupScreen({super.key});
@@ -20,6 +20,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
   final _nameController = TextEditingController();
   final _clubNameController = TextEditingController();
   final _tableCountController = TextEditingController();
+  final _practiceDiscountController = TextEditingController();
   File? _imageFile;
   bool _isLoading = false;
 
@@ -44,10 +45,14 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     try {
       String? logoUrl;
       if (_imageFile != null) {
-        final storageRef =
-        FirebaseStorage.instance.ref().child('club_logos/${user.uid}');
+        final storageRef = FirebaseStorage.instance.ref().child('club_logos/${user.uid}');
         await storageRef.putFile(_imageFile!);
         logoUrl = await storageRef.getDownloadURL();
+      }
+
+      double? practiceDiscount;
+      if (_practiceDiscountController.text.isNotEmpty) {
+        practiceDiscount = double.tryParse(_practiceDiscountController.text);
       }
 
       final clubDoc = await FirebaseFirestore.instance.collection('clubs').add({
@@ -55,6 +60,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
         'logo_url': logoUrl,
         'admin_id': user.uid,
         'table_count': int.parse(_tableCountController.text.trim()),
+        'practice_mode_discount_percentage': practiceDiscount, // New parameter
       });
 
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
@@ -93,6 +99,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
     _nameController.dispose();
     _clubNameController.dispose();
     _tableCountController.dispose();
+    _practiceDiscountController.dispose();
     super.dispose();
   }
 
@@ -162,8 +169,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                         ),
                         prefixIcon: const Icon(Icons.person, color: Colors.redAccent),
                       ),
-                      validator: (value) =>
-                      value!.isEmpty ? 'Enter your name' : null,
+                      validator: (value) => value!.isEmpty ? 'Enter your name' : null,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
@@ -175,8 +181,7 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                         ),
                         prefixIcon: const Icon(Icons.store, color: Colors.redAccent),
                       ),
-                      validator: (value) =>
-                      value!.isEmpty ? 'Enter club name' : null,
+                      validator: (value) => value!.isEmpty ? 'Enter club name' : null,
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
@@ -193,6 +198,25 @@ class _ProfileSetupScreenState extends ConsumerState<ProfileSetupScreen> {
                         if (value!.isEmpty) return 'Enter number of tables';
                         if (int.tryParse(value) == null || int.parse(value) <= 0)
                           return 'Enter a valid positive integer';
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _practiceDiscountController,
+                      decoration: InputDecoration(
+                        labelText: 'Practice Mode Discount (%)',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        prefixIcon: const Icon(Icons.discount, color: Colors.green),
+                      ),
+                      keyboardType: TextInputType.number,
+                      validator: (value) {
+                        if (value!.isEmpty) return null; // Optional field
+                        final discount = double.tryParse(value!);
+                        if (discount == null || discount < 0 || discount > 100)
+                          return 'Enter a valid percentage (0-100)';
                         return null;
                       },
                     ),

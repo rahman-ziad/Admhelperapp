@@ -31,6 +31,7 @@ class _CreateDiscountCodeScreenState extends State<CreateDiscountCodeScreen> {
   List<Map<String, dynamic>> filteredPlayers = [];
   late List<Map<String, dynamic>> allPlayers;
   bool isAllSelected = false;
+  String? discountType; // Mandatory: 'Games' or 'Food'
   bool _isLoading = true;
   bool _isSubmitting = false;
 
@@ -53,7 +54,9 @@ class _CreateDiscountCodeScreenState extends State<CreateDiscountCodeScreen> {
       filteredPlayers = allPlayers;
       setState(() {});
     } catch (e) {
-      print('Error fetching players: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error fetching players: $e')),
+      );
     }
   }
 
@@ -73,9 +76,9 @@ class _CreateDiscountCodeScreenState extends State<CreateDiscountCodeScreen> {
   Future<void> _submit() async {
     if (_isSubmitting) return;
 
-    if (_codeController.text.isEmpty || _discountValueController.text.isEmpty) {
+    if (_codeController.text.isEmpty || _discountValueController.text.isEmpty || discountType == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill all required fields')),
+        const SnackBar(content: Text('Please fill all required fields, including discount type')),
       );
       return;
     }
@@ -142,6 +145,7 @@ class _CreateDiscountCodeScreenState extends State<CreateDiscountCodeScreen> {
         'is_time_restricted': isTimeRestricted,
         'created_at': Timestamp.now(),
         'is_active': true,
+        'discount_type': discountType, // Mandatory discount type
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -303,6 +307,35 @@ class _CreateDiscountCodeScreenState extends State<CreateDiscountCodeScreen> {
                           controller: _discountValueController,
                           decoration: const InputDecoration(labelText: 'Discount Percentage'),
                           keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Discount Type',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        DropdownButtonFormField<String>(
+                          value: discountType,
+                          decoration: const InputDecoration(
+                            border: OutlineInputBorder(),
+                            contentPadding: EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+                          ),
+                          hint: const Text('Select Discount Type'),
+                          items: const [
+                            DropdownMenuItem<String>(
+                              value: 'Games',
+                              child: Text('Games'),
+                            ),
+                            DropdownMenuItem<String>(
+                              value: 'Food',
+                              child: Text('Food'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            setState(() {
+                              discountType = value;
+                            });
+                          },
+                          validator: (value) => value == null ? 'Please select a discount type' : null,
                         ),
                         const SizedBox(height: 16),
                         SwitchListTile(

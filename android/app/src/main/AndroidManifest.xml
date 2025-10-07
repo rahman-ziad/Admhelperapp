@@ -6,7 +6,7 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" /> <!-- For gallery -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" /> <!-- For older Android -->
     <application
-        android:label="Sportsstation"
+        android:label="SS Club"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">

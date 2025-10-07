@@ -739,122 +739,14 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                   ),
                 ),
                 const SizedBox(height: 16),
+                // In _CartScreenState._build (replace the ElevatedButton onPressed logic)
                 ElevatedButton.icon(
                   onPressed: selectedPlayerId != null && cart.isNotEmpty && !isLoading
                       ? () async {
                     setState(() => isLoading = true);
                     try {
-                      final totalAmount = cart.fold(0.0, (sum, item) => sum + item.price * item.quantity);
-                      final now = Timestamp.now();
-                      final currentDate = DateTime(now.toDate().year, now.toDate().month, now.toDate().day);
-
-                      final invoicesSnapshot = await FirebaseFirestore.instance
-                          .collection('clubs')
-                          .doc(widget.clubId)
-                          .collection('invoices')
-                          .where('player_id', isEqualTo: selectedPlayerId)
-                          .where('status', isEqualTo: 'unpaid')
-                          .get();
-
-                      QueryDocumentSnapshot<Map<String, dynamic>>? existingInvoice;
-                      for (var doc in invoicesSnapshot.docs) {
-                        final invoiceDate = (doc['date'] as Timestamp).toDate();
-                        if (invoiceDate.year == currentDate.year &&
-                            invoiceDate.month == currentDate.month &&
-                            invoiceDate.day == currentDate.day) {
-                          existingInvoice = doc;
-                          break;
-                        }
-                      }
-
-                      final newServices = cart
-                          .map((item) => {
-                        'type': 'food',
-                        'details': {
-                          'food_item_id': item.id,
-                          'food_item_name': item.name,
-                          'quantity': item.quantity,
-                          'price_at_time': item.price,
-                          'price': item.price * item.quantity,
-                          'purchase_time': Timestamp.now(),
-                          'split_bill': false,
-                        },
-                      })
-                          .toList();
-
-                      String invoiceId;
-                      double updatedTotal = totalAmount;
-                      if (existingInvoice != null) {
-                        final existingServices = List<Map<String, dynamic>>.from(existingInvoice['services']);
-                        existingServices.addAll(newServices);
-
-                        updatedTotal = existingServices.fold(0.0, (sum, service) {
-                          final details = service['details'] as Map<String, dynamic>;
-                          return sum + (details['price'] as double? ?? 0.0);
-                        });
-
-                        await FirebaseFirestore.instance
-                            .collection('clubs')
-                            .doc(widget.clubId)
-                            .collection('invoices')
-                            .doc(existingInvoice.id)
-                            .update({
-                          'services': existingServices,
-                          'total_amount': updatedTotal,
-                        });
-                        invoiceId = existingInvoice.id;
-                      } else {
-                        final invoiceData = {
-                          'player_id': selectedPlayerId,
-                          'player_name': allPlayers.firstWhere((p) => p['id'] == selectedPlayerId)['name'],
-                          'date': Timestamp.fromDate(currentDate),
-                          'status': 'unpaid',
-                          'total_amount': totalAmount,
-                          'paid_amount': 0.0,
-                          'services': newServices,
-                        };
-
-                        final invoiceRef = await FirebaseFirestore.instance
-                            .collection('clubs')
-                            .doc(widget.clubId)
-                            .collection('invoices')
-                            .add(invoiceData);
-                        invoiceId = invoiceRef.id;
-                      }
-
-                      // Add invoice to player's subcollection
-                      await FirebaseFirestore.instance
-                          .collection('players')
-                          .doc(selectedPlayerId)
-                          .collection('invoices')
-                          .doc(invoiceId)
-                          .set({
-                        'club_id': widget.clubId,
-                        'invoice_id': invoiceId,
-                        'date': Timestamp.fromDate(currentDate),
-                        'total_amount': updatedTotal,
-                        'status': 'unpaid',
-                      });
-
-                      // Add invoice ID to player's club-specific subcollection (player_uid -> club_id -> invoice_id)
-                      final playerClubInvoiceRef = FirebaseFirestore.instance
-                          .collection('players')
-                          .doc(selectedPlayerId)
-                          .collection('clubs')
-                          .doc(widget.clubId)
-                          .collection('invoices')
-                          .doc(invoiceId);
-
-                      // Check if invoice ID already exists to avoid duplicates
-                      final existingPlayerClubInvoice = await playerClubInvoiceRef.get();
-                      if (!existingPlayerClubInvoice.exists) {
-                        await playerClubInvoiceRef.set({
-                          'invoice_id': invoiceId,
-                          'timestamp': Timestamp.now(),
-                        });
-                      }
-
-                      // Update stock for each cart item
+                      // Pre-fetch and validate stock for all cart items
+                      Map<String, int> stockCache = {};
                       for (var cartItem in cart) {
                         final foodItemDoc = await FirebaseFirestore.instance
                             .collection('clubs')
@@ -862,23 +754,155 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                             .collection('food_items')
                             .doc(cartItem.id)
                             .get();
-
                         if (foodItemDoc.exists) {
                           final currentStock = (foodItemDoc.data()!['stock'] ?? 0) as int;
-                          final newStock = currentStock - cartItem.quantity;
-
-                          if (newStock >= 0) {
-                            await FirebaseFirestore.instance
-                                .collection('clubs')
-                                .doc(widget.clubId)
-                                .collection('food_items')
-                                .doc(cartItem.id)
-                                .update({'stock': newStock});
-                          } else {
-                            throw Exception('Not enough stock for ${cartItem.name}');
+                          if (currentStock < cartItem.quantity) {
+                            throw Exception('Not enough stock for ${cartItem.name}. Available: $currentStock, Requested: ${cartItem.quantity}');
                           }
+                          stockCache[cartItem.id] = currentStock;
+                        } else {
+                          throw Exception('Item ${cartItem.name} not found');
                         }
                       }
+
+                      // Start Firestore transaction
+                      await FirebaseFirestore.instance.runTransaction((transaction) async {
+                        final totalAmount = cart.fold(0, (sum, item) => (sum + item.price * item.quantity).round());
+                        final currentTimestamp = Timestamp.now();
+                        final now = currentTimestamp.toDate();
+
+                        // Query for existing unpaid invoice outside transaction
+                        final invoicesRef = FirebaseFirestore.instance
+                            .collection('clubs')
+                            .doc(widget.clubId)
+                            .collection('invoices');
+                        final invoicesSnapshot = await invoicesRef
+                            .where('player_id', isEqualTo: selectedPlayerId)
+                            .where('status', isEqualTo: 'unpaid')
+                            .where('practice_mode', isEqualTo: false)
+                            .get();
+
+                        QueryDocumentSnapshot<Map<String, dynamic>>? existingInvoice;
+                        for (var doc in invoicesSnapshot.docs) {
+                          final invoiceDate = (doc['date'] as Timestamp).toDate();
+                          if (invoiceDate.year == now.year &&
+                              invoiceDate.month == now.month &&
+                              invoiceDate.day == now.day) {
+                            existingInvoice = doc;
+                            break;
+                          }
+                        }
+
+                        final newServices = cart
+                            .map((item) => {
+                          'type': 'food',
+                          'details': {
+                            'food_item_id': item.id,
+                            'food_item_name': item.name,
+                            'quantity': item.quantity,
+                            'price_at_time': item.price.round(),
+                            'price': (item.price * item.quantity).round(),
+                            'purchase_time': Timestamp.now(),
+                            'split_bill': false,
+                          },
+                        })
+                            .toList();
+
+                        String invoiceId;
+                        int updatedTotal = totalAmount;
+
+                        if (existingInvoice != null) {
+                          // Read existing services within transaction
+                          final invoiceDoc = await transaction.get(invoicesRef.doc(existingInvoice.id));
+                          final existingServices = List<Map<String, dynamic>>.from(invoiceDoc['services'] ?? []);
+                          existingServices.addAll(newServices);
+
+                          updatedTotal = existingServices.fold(0, (sum, service) {
+                            final details = service['details'] as Map<String, dynamic>;
+                            return sum + (details['price'] as num? ?? 0).toInt();
+                          });
+
+                          transaction.update(
+                            invoicesRef.doc(existingInvoice.id),
+                            {
+                              'services': existingServices,
+                              'gross_total': updatedTotal,
+                              'net_total': updatedTotal,
+                              'total_amount': updatedTotal,
+                              'date': currentTimestamp,
+                            },
+                          );
+                          invoiceId = existingInvoice.id;
+                        } else {
+                          // Create new invoice
+                          final invoiceData = {
+                            'player_id': selectedPlayerId,
+                            'player_name': allPlayers.firstWhere((p) => p['id'] == selectedPlayerId)['name'],
+                            'date': currentTimestamp,
+                            'status': 'unpaid',
+                            'gross_total': totalAmount,
+                            'net_total': totalAmount,
+                            'total_amount': totalAmount,
+                            'paid_amount': 0,
+                            'services': newServices,
+                            'practice_mode': false,
+                            'discount_amount': 0,
+                            'discount_amounts': {'games': 0, 'food': 0},
+                            'discount_codes': {'games': null, 'food': null},
+                            'round_up': 0,
+                          };
+
+                          final invoiceRef = invoicesRef.doc();
+                          transaction.set(invoiceRef, invoiceData);
+                          invoiceId = invoiceRef.id;
+                        }
+
+                        // Update player's invoice subcollection
+                        final playerInvoiceRef = FirebaseFirestore.instance
+                            .collection('players')
+                            .doc(selectedPlayerId)
+                            .collection('invoices')
+                            .doc(invoiceId);
+                        transaction.set(playerInvoiceRef, {
+                          'club_id': widget.clubId,
+                          'invoice_id': invoiceId,
+                          'date': currentTimestamp,
+                          'gross_total': updatedTotal,
+                          'net_total': updatedTotal,
+                          'total_amount': updatedTotal,
+                          'status': 'unpaid',
+                          'practice_mode': false,
+                          'discount_amount': 0,
+                          'discount_amounts': {'games': 0, 'food': 0},
+                          'discount_codes': {'games': null, 'food': null},
+                          'round_up': 0,
+                        });
+
+                        // Add invoice ID to player's club-specific subcollection
+                        final playerClubInvoiceRef = FirebaseFirestore.instance
+                            .collection('players')
+                            .doc(selectedPlayerId)
+                            .collection('clubs')
+                            .doc(widget.clubId)
+                            .collection('invoices')
+                            .doc(invoiceId);
+                        transaction.set(playerClubInvoiceRef, {
+                          'invoice_id': invoiceId,
+                          'timestamp': currentTimestamp,
+                        });
+
+                        // Update stock within transaction
+                        for (var cartItem in cart) {
+                          final foodItemRef = FirebaseFirestore.instance
+                              .collection('clubs')
+                              .doc(widget.clubId)
+                              .collection('food_items')
+                              .doc(cartItem.id);
+                          final cachedStock = stockCache[cartItem.id]!;
+                          final newStock = cachedStock - cartItem.quantity;
+                          transaction.update(foodItemRef, {'stock': newStock});
+                        }
+                      });
 
                       final selectedPlayer = allPlayers.firstWhere((p) => p['id'] == selectedPlayerId);
                       await _updateRecentPlayers(selectedPlayerId!, selectedPlayer);
@@ -905,7 +929,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
                     minimumSize: const Size(double.infinity, 50),
                     backgroundColor: Colors.red,
                   ),
-                ),
+                )
               ],
             ),
           );

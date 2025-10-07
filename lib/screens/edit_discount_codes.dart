@@ -113,7 +113,9 @@ class _DiscountCodeListViewState extends State<DiscountCodeListView> {
         });
       }
     } catch (e) {
-      print('Error fetching discount codes: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error fetching discount codes: $e')),
+      );
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -138,7 +140,6 @@ class _DiscountCodeListViewState extends State<DiscountCodeListView> {
               return Center(child: Text('Error: ${snapshot.error}'));
             }
 
-            // Update cache with new data if available
             if (snapshot.hasData) {
               _cachedDiscountCodes = snapshot.data!.docs;
             }
@@ -164,6 +165,7 @@ class _DiscountCodeListViewState extends State<DiscountCodeListView> {
                 final appliesToAll = codeData['applies_to_all'] ?? false;
                 final isActive = codeData['is_active'] ?? true;
                 final isTimeRestricted = codeData['is_time_restricted'] ?? false;
+                final discountType = codeData['discount_type'] as String? ?? 'Not Set';
 
                 return Card(
                   margin: const EdgeInsets.symmetric(vertical: 8),
@@ -185,6 +187,7 @@ class _DiscountCodeListViewState extends State<DiscountCodeListView> {
                           )
                         else
                           const Text('Time: All Day'),
+                        Text('Type: $discountType'),
                         Text(
                           'Status: ${isActive ? 'Active' : 'Inactive'}',
                           style: TextStyle(
@@ -255,6 +258,7 @@ class _EditDiscountCodeDetailScreenState extends State<EditDiscountCodeDetailScr
   late List<Map<String, dynamic>> allPlayers;
   bool isAllSelected = false;
   bool isActive = true;
+  String? discountType; // Can be 'Games', 'Food', or null
   bool _isSubmitting = false;
   bool _isLoading = true;
 
@@ -277,6 +281,7 @@ class _EditDiscountCodeDetailScreenState extends State<EditDiscountCodeDetailScr
     isAllSelected = widget.initialData['applies_to_all'] ?? false;
     selectedPlayers = List<String>.from(widget.initialData['assigned_players'] ?? []);
     isActive = widget.initialData['is_active'] ?? true;
+    discountType = widget.initialData['discount_type'] as String?;
   }
 
   TimeOfDay? _parseTime(String? timeStr) {
@@ -298,7 +303,9 @@ class _EditDiscountCodeDetailScreenState extends State<EditDiscountCodeDetailScr
         });
       }
     } catch (e) {
-      print('Error fetching players: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error fetching players: $e')),
+      );
     }
   }
 
@@ -386,6 +393,7 @@ class _EditDiscountCodeDetailScreenState extends State<EditDiscountCodeDetailScr
             : null,
         'is_time_restricted': isTimeRestricted,
         'is_active': isActive,
+        'discount_type': discountType, // Update with selected discount type
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -427,6 +435,38 @@ class _EditDiscountCodeDetailScreenState extends State<EditDiscountCodeDetailScr
                     controller: _discountValueController,
                     decoration: const InputDecoration(labelText: 'Discount Percentage'),
                     keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Discount Type',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  DropdownButtonFormField<String>(
+                    value: discountType,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(vertical: 10, horizontal: 10),
+                    ),
+                    hint: const Text('Select Discount Type'),
+                    items: [
+                      const DropdownMenuItem<String>(
+                        value: null,
+                        child: Text('Not Set'),
+                      ),
+                      const DropdownMenuItem<String>(
+                        value: 'Games',
+                        child: Text('Games'),
+                      ),
+                      const DropdownMenuItem<String>(
+                        value: 'Food',
+                        child: Text('Food'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        discountType = value;
+                      });
+                    },
                   ),
                   const SizedBox(height: 16),
                   const Text(

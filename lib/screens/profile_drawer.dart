@@ -10,6 +10,7 @@ import 'edit_table_screen.dart';
 import 'home_screen.dart'; // For userProfileProvider
 import 'create_discount_code.dart';
 import 'add_food_items.dart';
+import 'report.dart';
 class ProfileDrawer extends ConsumerWidget {
   final String clubId;
 
@@ -133,6 +134,18 @@ class ProfileDrawer extends ConsumerWidget {
                 },
               ),
               ListTile(
+                leading: const Icon(Icons.newspaper_rounded),
+                title: const Text('Reports'),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ReportScreen(clubId: clubId),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
                 leading: const Icon(Icons.logout),
                 title: const Text('Logout'),
                 onTap: () async {
@@ -145,6 +158,7 @@ class ProfileDrawer extends ConsumerWidget {
                   );
                 },
               ),
+
             ],
           );
         },

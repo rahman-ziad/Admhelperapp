@@ -1,9 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:shimmer_animation/shimmer_animation.dart';
-
+import 'package:loading_animation_widget/loading_animation_widget.dart';
+import 'package:flutter/services.dart';
 class InvoiceScreen extends ConsumerStatefulWidget {
   final String clubId;
 
@@ -15,8 +15,8 @@ class InvoiceScreen extends ConsumerStatefulWidget {
 
 class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
   String _searchQuery = '';
-  String _statusFilter = 'All'; // All, Due, Unpaid
-  String _dateFilter = 'All'; // All, Today, Last 7 Days
+  String _statusFilter = 'Unpaid';
+  String _dateFilter = 'All';
   final Map<String, String> playerPhotos = {};
   final Map<String, Map<String, dynamic>> playerDetails = {};
 
@@ -119,11 +119,11 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
                 playerIGN.contains(query) ||
                 playerPhone.contains(query);
 
-            final matchStatus = _statusFilter == 'All'
-                ? true
+            final matchStatus = _statusFilter == 'Paid'
+                ? status == 'paid'
                 : _statusFilter == 'Due'
                 ? status == 'due'
-                : status == 'unpaid';
+                : (status == 'unpaid' || status == 'due'); // Include 'due' in 'Unpaid' filter
 
             final now = DateTime.now();
             final today = DateTime(now.year, now.month, now.day);
@@ -181,7 +181,7 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _buildFilterButton('All'),
+                    _buildFilterButton('Paid'),
                     _buildFilterButton('Due'),
                     _buildFilterButton('Unpaid'),
                   ],
@@ -195,13 +195,16 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
                     final invoice = filteredInvoices[index];
                     final playerName = invoice['player_name'] ?? 'Unknown';
                     final status = invoice['status'] ?? 'unknown';
-                    final totalAmount = (invoice['total_amount'] ?? 0.0).toDouble();
-                    final paidAmount = (invoice['paid_amount'] ?? 0.0).toDouble();
-                    final discountAmount = (invoice['discount_amount'] as num?)?.toDouble() ?? 0.0;
-                    final discountedTotal = totalAmount - discountAmount;
-                    final dueAmount = discountedTotal - paidAmount;
+                    final totalAmount = (invoice['gross_total'] as num?)?.toInt() ?? 0;
+                    final paidAmount = (invoice['paid_amount'] as num?)?.toInt() ?? 0;
+                    final discountAmount = (invoice['discount_amount'] as num?)?.toInt() ?? 0;
+                    final roundUpAmount = (invoice['round_up'] as num?)?.toInt() ?? 0;
+                    final payableAmount = totalAmount - discountAmount + roundUpAmount;
+                    final dueAmount = payableAmount - paidAmount;
                     final playerId = invoice['player_id'];
                     final photoUrl = playerPhotos[playerId] ?? '';
+                    final playerPhone = playerDetails[playerId]?['phone_number'] ?? 'N/A';
+                    final playerIGN = playerDetails[playerId]?['ign'] ?? '';
                     final services = (invoice['services'] as List<dynamic>?) ?? [];
                     final billingMode = services.isNotEmpty
                         ? (services.first['type'] as String?)?.split('_').first ?? 'Unknown'
@@ -210,10 +213,10 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
                         ? (services.first['details']['coins'] as num?)?.toInt() ?? 0
                         : 0;
 
-                    final nameWords = playerName.split(' ');
-                    final truncatedName = nameWords.length > 2
-                        ? '${nameWords.take(2).join(' ')}...'
-                        : playerName;
+                    final nameAndIGN = '$playerName ($playerIGN)';
+                    final truncatedNameAndIGN = nameAndIGN.length > 20
+                        ? '${nameAndIGN.substring(0, 17)}...'
+                        : nameAndIGN;
 
                     return Card(
                       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -256,71 +259,68 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            truncatedName,
-                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                                          ),
-                                        ),
-                                        if (status == 'paid')
-                                          const SizedBox()
-                                        else if (status == 'due')
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: Colors.red.shade100,
-                                              borderRadius: BorderRadius.circular(12),
-                                            ),
-                                            child: const Text(
-                                              'DUES',
-                                              style: TextStyle(
-                                                color: Colors.red,
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.bold,
-                                              ),
-                                            ),
-                                          )
-                                        else if (status == 'unpaid')
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: Colors.orange.shade100,
-                                                borderRadius: BorderRadius.circular(12),
-                                              ),
-                                              child: const Text(
-                                                'UNPAID',
-                                                style: TextStyle(
-                                                  color: Colors.orange,
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ),
-                                      ],
+                                    Text(
+                                      truncatedNameAndIGN,
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                                     ),
                                     Text(
-                                      '${invoice['id'] ?? 'N/A'}',
+                                      playerPhone,
                                       style: const TextStyle(fontSize: 12, color: Colors.grey),
                                     ),
                                   ],
                                 ),
                               ),
                               const SizedBox(width: 16),
-                              Center(
-                                child: Text(
-                                  status == 'paid'
-                                      ? '৳${paidAmount.toStringAsFixed(0)}'
-                                      : '৳${dueAmount.toStringAsFixed(0)}',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: status == 'paid'
-                                        ? Colors.green
-                                        : (status == 'due' ? Colors.red : Colors.orange),
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    status == 'paid'
+                                        ? '৳${paidAmount.toStringAsFixed(0)}'
+                                        : '৳${dueAmount.toStringAsFixed(0)}',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: status == 'paid'
+                                          ? Colors.green
+                                          : (status == 'due' ? Colors.red : Colors.orange),
+                                    ),
                                   ),
-                                ),
+                                  if (status == 'paid')
+                                    const SizedBox()
+                                  else if (status == 'due')
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.shade100,
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: const Text(
+                                        'DUES',
+                                        style: TextStyle(
+                                          color: Colors.red,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    )
+                                  else if (status == 'unpaid')
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.orange.shade100,
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: const Text(
+                                          'UNPAID',
+                                          style: TextStyle(
+                                            color: Colors.orange,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                ],
                               ),
                             ],
                           ),
@@ -335,14 +335,17 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
         },
         loading: () => Shimmer(
           child: Column(
-            children: List.generate(5, (index) => Container(
-              margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              height: 90,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(12),
+            children: List.generate(
+              5,
+                  (index) => Container(
+                margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                height: 90,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
-            )),
+            ),
           ),
         ),
         error: (error, _) => Center(child: Text('Error: $error')),
@@ -483,16 +486,17 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     return '${hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')} $period';
   }
 
+  // In _InvoiceDetailScreenState.build
   @override
   Widget build(BuildContext context) {
     final services = (widget.invoice['services'] as List<dynamic>?) ?? [];
     final playerName = widget.invoice['player_name'] as String? ?? 'Unknown';
-    final totalAmount = (widget.invoice['total_amount'] as num?)?.toDouble() ?? 0.0;
-    final paidAmount = (widget.invoice['paid_amount'] as num?)?.toDouble() ?? 0.0;
-    final discountAmount = (widget.invoice['discount_amount'] as num?)?.toDouble() ?? 0.0;
-    final roundUpAmount = (widget.invoice['round_up'] as num?)?.toDouble() ?? 0.0;
-    final discountedTotal = totalAmount - discountAmount;
-    final dueAmount = discountedTotal - paidAmount; // Round-up not included in dues
+    final grossTotal = (widget.invoice['gross_total'] as num?)?.toInt() ?? 0; // Use gross_total
+    final netTotal = (widget.invoice['net_total'] as num?)?.toInt() ?? 0; // Use net_total
+    final paidAmount = (widget.invoice['paid_amount'] as num?)?.toInt() ?? 0;
+    final discountAmount = (widget.invoice['discount_amount'] as num?)?.toInt() ?? 0;
+    final roundUpAmount = (widget.invoice['round_up'] as num?)?.toInt() ?? 0;
+    final dueAmount = netTotal - paidAmount; // Use net_total for due calculation
     final status = widget.invoice['status'] as String? ?? 'unknown';
 
     return Scaffold(
@@ -557,16 +561,28 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                         '$playerPhoneNumber',
                         style: const TextStyle(fontSize: 14, color: Colors.grey),
                       ),
-                      const SizedBox(height: 4),
+
                       Row(
                         children: [
                           const Text(
                             'Invoice no ',
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
+                            style: TextStyle(fontSize: 14, color: Colors.grey),
                           ),
                           Text(
-                            widget.invoice['id'] as String? ?? 'N/A',
-                            style: const TextStyle(fontSize: 12, color: Colors.black),
+                            widget.invoice['id'] != null && widget.invoice['id'].length > 6
+                                ? '${widget.invoice['id'].substring(0, 6)}...'
+                                : widget.invoice['id'] ?? 'N/A',
+                            style: const TextStyle(fontSize: 14, color: Colors.black),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(Icons.copy, size: 18, color: Colors.grey),
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: widget.invoice['id'] ?? 'N/A'));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Invoice number copied')),
+                              );
+                            },
                           ),
                           const Spacer(),
                           Container(
@@ -585,7 +601,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                             ),
                           ),
                         ],
-                      ),
+                      )
                     ],
                   ),
                 ),
@@ -599,7 +615,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'TOTAL',
+                      'GROSS TOTAL',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
                     ),
                     Row(
@@ -609,7 +625,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                           style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                         ),
                         Text(
-                          totalAmount.toStringAsFixed(0),
+                          grossTotal.toStringAsFixed(0),
                           style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                         ),
                       ],
@@ -617,33 +633,41 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                     if (discountAmount > 0) ...[
                       const SizedBox(height: 4),
                       Text(
-                        'Discount: -৳${discountAmount.toStringAsFixed(0)}',
+                        'Total Discount: -৳${discountAmount.toStringAsFixed(0)}',
                         style: const TextStyle(fontSize: 16, color: Colors.green),
                       ),
+                    ],
+                    if (widget.invoice['discount_amounts']?['games'] != null &&
+                        (widget.invoice['discount_amounts']['games'] as num).toInt() > 0) ...[
                       const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          const Text(
-                            'Payable: ৳',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                          Text(
-                            discountedTotal.toStringAsFixed(0),
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                        ],
+                      Text(
+                        'Games Discount: -৳${(widget.invoice['discount_amounts']['games'] as num).toInt().toStringAsFixed(0)}',
+                        style: const TextStyle(fontSize: 16, color: Colors.green),
                       ),
                     ],
-                    if (roundUpAmount > 0)
+                    if (widget.invoice['discount_amounts']?['food'] != null &&
+                        (widget.invoice['discount_amounts']['food'] as num).toInt() > 0) ...[
+                      const SizedBox(height: 4),
                       Text(
-                        'Rounded Up: +৳${roundUpAmount.toStringAsFixed(0)}',
+                        'Food Discount: -৳${(widget.invoice['discount_amounts']['food'] as num).toInt().toStringAsFixed(0)}',
+                        style: const TextStyle(fontSize: 16, color: Colors.green),
+                      ),
+                    ],
+                    if (roundUpAmount > 0) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Rounded Up: +৳${roundUpAmount.toStringAsFixed(0)}', // Changed to +
                         style: const TextStyle(fontSize: 16, color: Colors.orange),
                       ),
-                    if (widget.invoice['stars_used'] != null && (widget.invoice['stars_used'] as num).toInt() > 0)
+                    ],
+                    if (widget.invoice['stars_used'] != null &&
+                        (widget.invoice['stars_used'] as num).toInt() > 0) ...[
+                      const SizedBox(height: 4),
                       Text(
                         'Stars Used: ${(widget.invoice['stars_used'] as num).toInt()}',
                         style: const TextStyle(fontSize: 16, color: Colors.yellow),
                       ),
+                    ],
                   ],
                 ),
                 Column(
@@ -653,15 +677,42 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                       _formatDate(widget.invoice['date'] as Timestamp?),
                       style: const TextStyle(fontSize: 14, color: Colors.grey),
                     ),
-                    Text(
-                      'Paid: ${paidAmount.toStringAsFixed(0)}',
-                      style: const TextStyle(fontSize: 14, color: Colors.grey),
-                    ),
-                    if (dueAmount > 0)
-                      Text(
-                        'Due: ${dueAmount.toStringAsFixed(0)}',
-                        style: const TextStyle(fontSize: 14, color: Colors.red),
+                    if (status == 'paid') ...[
+                      Row(
+                        children: [
+                          const Text(
+                            'Paid: ৳',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            paidAmount.toStringAsFixed(0),
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                        ],
                       ),
+                    ] else ...[
+                      Text(
+                        'Paid: ৳${paidAmount.toStringAsFixed(0)}',
+                        style: const TextStyle(fontSize: 14, color: Colors.grey),
+                      ),
+                      if (dueAmount > 0)
+                        Text(
+                          'Due: ৳${dueAmount.toStringAsFixed(0)}',
+                          style: const TextStyle(fontSize: 14, color: Colors.red),
+                        ),
+                      Row(
+                        children: [
+                          const Text(
+                            'Net Total: ৳', // Changed to Net Total
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            netTotal.toStringAsFixed(0),
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -673,7 +724,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                 itemBuilder: (context, index) {
                   final service = services[index];
                   final details = service['details'] as Map<String, dynamic>;
-                  final price = details['price'] as double? ?? 0.0;
+                  final price = (details['price'] as num?)?.toInt() ?? 0; // Fix type cast
                   final splitBill = details['split_bill'] as bool? ?? false;
 
                   if (service['type'] == 'food') {
@@ -692,7 +743,8 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                               width: 40,
                               height: 40,
                               fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) => const Icon(Icons.fastfood, size: 40),
+                              errorBuilder: (context, error, stackTrace) =>
+                              const Icon(Icons.fastfood, size: 40),
                             )
                                 : const Icon(Icons.fastfood, size: 40),
                             const SizedBox(width: 16),
@@ -743,26 +795,26 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                   } else {
                     String title = '';
                     String subtitle = '';
-                    double calculatedPrice = 0.0;
+                    int calculatedPrice = 0; // Changed to int
                     Timestamp? startTime;
                     if (service['type'] == 'pool_hour') {
                       title = 'POOL (HOUR)';
                       final minutes = (details['minutes'] as num?)?.toInt() ?? 0;
-                      final rate = (details['rate'] as num?)?.toDouble() ?? 0;
+                      final rate = (details['rate'] as num?)?.toInt() ?? 0;
                       subtitle = '$minutes mins x $rate tk';
                       calculatedPrice = minutes * rate;
                       startTime = details['start_time'] as Timestamp?;
                     } else if (service['type'] == 'pool_coin') {
                       title = 'POOL (COIN)';
                       final coins = (details['coins'] as num?)?.toInt() ?? 0;
-                      final rate = (details['rate'] as num?)?.toDouble() ?? 0;
+                      final rate = (details['rate'] as num?)?.toInt() ?? 0;
                       subtitle = '$coins coin x $rate tk';
                       calculatedPrice = coins * rate;
                       startTime = details['start_time'] as Timestamp?;
                     } else if (service['type'] == 'snooker_hour') {
                       title = 'SNOOKER (HOUR)';
                       final minutes = (details['minutes'] as num?)?.toInt() ?? 0;
-                      final rate = (details['rate'] as num?)?.toDouble() ?? 0;
+                      final rate = (details['rate'] as num?)?.toInt() ?? 0;
                       subtitle = '$minutes mins x $rate tk';
                       calculatedPrice = minutes * rate;
                       startTime = details['start_time'] as Timestamp?;
@@ -874,8 +926,6 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
 
 
 
-
-
 class InvoicePaymentScreen extends StatefulWidget {
   final Map<String, dynamic> invoice;
   final String clubId;
@@ -889,12 +939,14 @@ class InvoicePaymentScreen extends StatefulWidget {
   @override
   _InvoicePaymentScreenState createState() => _InvoicePaymentScreenState();
 }
-
+// In _InvoicePaymentScreenState
 class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
-  double _discountAmount = 0.0;
-  List<Map<String, dynamic>> _newPayments = []; // Only new payments for this session
+  int _discountAmount = 0;
+  List<Map<String, dynamic>> _newPayments = [];
   String? _selectedDiscountCode;
   bool isLoading = false;
+  Map<String, String?> _selectedDiscountCodes = {'games': null, 'food': null};
+  Map<String, int> _discountAmounts = {'games': 0, 'food': 0};
 
   @override
   void initState() {
@@ -904,9 +956,15 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
 
   void _initializeData() {
     setState(() => isLoading = true);
-    _discountAmount = (widget.invoice['discount_amount'] as num?)?.toDouble() ?? 0.0;
-    _selectedDiscountCode = widget.invoice['discount_code'] as String?;
-    _newPayments = []; // Start fresh for new payments in this session
+    _discountAmounts = {
+      'games': (widget.invoice['discount_amounts']?['games'] as num?)?.toInt() ?? 0,
+      'food': (widget.invoice['discount_amounts']?['food'] as num?)?.toInt() ?? 0,
+    };
+    _selectedDiscountCodes = {
+      'games': widget.invoice['discount_codes']?['games'] as String?,
+      'food': widget.invoice['discount_codes']?['food'] as String?,
+    };
+    _newPayments = [];
     setState(() => isLoading = false);
   }
 
@@ -922,80 +980,180 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
       ...doc.data(),
     }).toList());
 
+    if (discountCodes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No active discount codes found')),
+      );
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Select Discount Code',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: discountCodes.length,
-                  itemBuilder: (context, index) {
-                    final code = discountCodes[index];
-                    final appliesToAll = code['applies_to_all'] ?? false;
-                    final playerId = widget.invoice['player_id'];
-                    final isApplicable = appliesToAll ||
-                        (code['assigned_players'] as List<dynamic>?)!.contains(playerId) ??
-                        false;
-                    if (!isApplicable) return const SizedBox.shrink();
-                    return ListTile(
-                      title: Text(code['code'] ?? 'Unknown'),
-                      subtitle: Text('Discount: ${code['discount_value']}%'),
-                      trailing: _selectedDiscountCode == code['id']
-                          ? const Icon(Icons.check, color: Colors.green)
-                          : null,
-                      onTap: () {
-                        setState(() {
-                          _selectedDiscountCode = code['id'];
-                          _discountAmount = (widget.invoice['total_amount'] as num? ?? 0) *
-                              (code['discount_value'] as num? ?? 0) /
-                              100;
-                        });
-                        Navigator.pop(context);
-                      },
-                    );
-                  },
-                ),
-              ),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: isLoading
-                      ? null
-                      : () {
-                    setState(() => isLoading = true);
-                    Navigator.pop(context);
-                    setState(() => isLoading = false);
-                  },
-                  child: isLoading
-                      ? LoadingAnimationWidget.staggeredDotsWave(
-                    color: Colors.red,
-                    size: 24,
-                  )
-                      : const Text('Apply', style: TextStyle(color: Colors.white)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setSheetState) {
+            return DraggableScrollableSheet(
+              initialChildSize: 0.7,
+              minChildSize: 0.3,
+              maxChildSize: 0.9,
+              expand: false,
+              builder: (context, scrollController) {
+                return Padding(
+                  padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+                  child: SingleChildScrollView(
+                    controller: scrollController,
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            'Select Discount Codes',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Games Discounts',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            height: 150,
+                            child: discountCodes.any((code) => code['discount_type'] == 'Games')
+                                ? ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: discountCodes.length,
+                              itemBuilder: (context, index) {
+                                final code = discountCodes[index];
+                                if (code['discount_type'] != 'Games') return const SizedBox.shrink();
+                                final appliesToAll = code['applies_to_all'] ?? false;
+                                final playerId = widget.invoice['player_id'];
+                                final assignedPlayers = code['assigned_players'] as List<dynamic>?;
+                                final isApplicable = appliesToAll || (assignedPlayers?.contains(playerId) ?? false);
+
+                                if (!isApplicable) return const SizedBox.shrink();
+
+                                return ListTile(
+                                  title: Text(code['code'] ?? 'Unknown'),
+                                  subtitle: Text('Discount: ${code['discount_value']}%'),
+                                  trailing: _selectedDiscountCodes['games'] == code['id']
+                                      ? const Icon(Icons.check, color: Colors.green)
+                                      : null,
+                                  onTap: () {
+                                    setSheetState(() {
+                                      _selectedDiscountCodes['games'] = code['id'];
+                                      _calculateDiscounts();
+                                    });
+                                  },
+                                );
+                              },
+                            )
+                                : const Text('No Games discounts available'),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Food Discounts',
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            height: 150,
+                            child: discountCodes.any((code) => code['discount_type'] == 'Food')
+                                ? ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: discountCodes.length,
+                              itemBuilder: (context, index) {
+                                final code = discountCodes[index];
+                                if (code['discount_type'] != 'Food') return const SizedBox.shrink();
+                                final appliesToAll = code['applies_to_all'] ?? false;
+                                final playerId = widget.invoice['player_id'];
+                                final assignedPlayers = code['assigned_players'] as List<dynamic>?;
+                                final isApplicable = appliesToAll || (assignedPlayers?.contains(playerId) ?? false);
+
+                                if (!isApplicable) return const SizedBox.shrink();
+
+                                return ListTile(
+                                  title: Text(code['code'] ?? 'Unknown'),
+                                  subtitle: Text('Discount: ${code['discount_value']}%'),
+                                  trailing: _selectedDiscountCodes['food'] == code['id']
+                                      ? const Icon(Icons.check, color: Colors.green)
+                                      : null,
+                                  onTap: () {
+                                    setSheetState(() {
+                                      _selectedDiscountCodes['food'] = code['id'];
+                                      _calculateDiscounts();
+                                    });
+                                  },
+                                );
+                              },
+                            )
+                                : const Text('No Food discounts available'),
+                          ),
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: isLoading
+                                      ? null
+                                      : () {
+                                    setState(() => isLoading = true);
+                                    Navigator.pop(context);
+                                    setState(() => isLoading = false);
+                                  },
+                                  child: isLoading
+                                      ? LoadingAnimationWidget.staggeredDotsWave(
+                                    color: Colors.red,
+                                    size: 24,
+                                  )
+                                      : const Text('Done', style: TextStyle(color: Colors.white)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(30),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: ElevatedButton(
+                                  onPressed: isLoading
+                                      ? null
+                                      : () {
+                                    setSheetState(() {
+                                      _selectedDiscountCodes['games'] = null;
+                                      _selectedDiscountCodes['food'] = null;
+                                      _discountAmounts['games'] = 0;
+                                      _discountAmounts['food'] = 0;
+                                    });
+                                    setState(() => _calculateDiscounts());
+                                  },
+                                  child: const Text('Clear', style: TextStyle(color: Colors.white)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.grey,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(30),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
+                );
+              },
+            );
+          },
         );
       },
     );
@@ -1007,127 +1165,202 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
 
     final existingPayment = index != null ? _newPayments[index] : null;
     if (existingPayment != null) {
-      controller.text = existingPayment['amount'].toString();
+      controller.text = '${existingPayment['amount'].toInt()}';
     }
 
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
         return StatefulBuilder(
-          builder: (context, setState) {
-            return Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Enter Amount for $method${existingPayment != null ? ' (Edit)' : ''}',
-                    style: const TextStyle(fontSize: 18),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      const Text('Amount Received (৳):', style: TextStyle(fontSize: 16)),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: TextField(
-                          controller: controller,
-                          keyboardType: TextInputType.number,
-                          autofocus: true,
-                          textInputAction: TextInputAction.done,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
+          builder: (BuildContext context, setSheetState) {
+            return DraggableScrollableSheet(
+              initialChildSize: 0.58,
+              minChildSize: 0.4,
+              maxChildSize: 1.0,
+              expand: false,
+              builder: (context, scrollController) {
+                return SafeArea(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).viewInsets.bottom,
+                      left: 20,
+                      right: 20,
+                      top: 20,
+                    ),
+                    child: SingleChildScrollView(
+                      controller: scrollController,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Enter Amount for $method${existingPayment != null ? ' (Edit)' : ''}',
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                           ),
-                        ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              const Text('Amount Received (৳):', style: TextStyle(fontSize: 16)),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: TextField(
+                                  controller: controller,
+                                  keyboardType: TextInputType.number,
+                                  autofocus: true,
+                                  textInputAction: TextInputAction.done,
+                                  decoration: const InputDecoration(
+                                    border: OutlineInputBorder(),
+                                    hintText: 'Enter amount',
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              ElevatedButton(
+                                onPressed: isLoading
+                                    ? null
+                                    : () async {
+                                  setSheetState(() => isLoading = true);
+                                  final enteredAmount = int.tryParse(controller.text) ?? 0;
+                                  // CHANGED: Allow 0 amount (only disallow negative)
+                                  if (enteredAmount >= 0) {
+                                    if (index != null) {
+                                      setState(() {
+                                        _newPayments[index] = {
+                                          'method': method,
+                                          'amount': enteredAmount,
+                                          'timestamp': Timestamp.now(),
+                                        };
+                                      });
+                                    } else {
+                                      setState(() {
+                                        _newPayments.add({
+                                          'method': method,
+                                          'amount': enteredAmount,
+                                          'timestamp': Timestamp.now(),
+                                        });
+                                      });
+                                    }
+                                    Navigator.pop(context);
+                                    setState(() {});
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Please enter a valid amount (>= 0)')),
+                                    );
+                                  }
+                                  setSheetState(() => isLoading = false);
+                                },
+                                child: isLoading
+                                    ? LoadingAnimationWidget.staggeredDotsWave(
+                                  color: Colors.blue,
+                                  size: 24,
+                                )
+                                    : const Text('Save', style: TextStyle(color: Colors.white)),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.blue,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(30),
+                                  ),
+                                ),
+                              ),
+                              if (existingPayment != null)
+                                ElevatedButton(
+                                  onPressed: isLoading
+                                      ? null
+                                      : () async {
+                                    setState(() => _newPayments.removeAt(index!));
+                                    Navigator.pop(context);
+                                    setState(() {});
+                                    setSheetState(() => isLoading = false);
+                                  },
+                                  child: isLoading
+                                      ? LoadingAnimationWidget.staggeredDotsWave(
+                                    color: Colors.red,
+                                    size: 24,
+                                  )
+                                      : const Text('Delete', style: TextStyle(color: Colors.white)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(30),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 20),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      ElevatedButton(
-                        onPressed: isLoading
-                            ? null
-                            : () {
-                          setState(() => isLoading = true);
-                          final entered = double.tryParse(controller.text) ?? 0.0;
-                          if (entered > 0) {
-                            if (index != null) {
-                              setState(() {
-                                _newPayments[index] = {
-                                  'method': method,
-                                  'amount': entered,
-                                  'timestamp': Timestamp.now(),
-                                };
-                              });
-                            } else {
-                              setState(() {
-                                _newPayments.add({
-                                  'method': method,
-                                  'amount': entered,
-                                  'timestamp': Timestamp.now(),
-                                });
-                              });
-                            }
-                            Navigator.pop(context);
-                            this.setState(() {}); // Refresh parent state
-                          }
-                          setState(() => isLoading = false);
-                        },
-                        child: isLoading
-                            ? LoadingAnimationWidget.staggeredDotsWave(
-                          color: Colors.blue,
-                          size: 24,
-                        )
-                            : const Text('Save', style: TextStyle(color: Colors.white)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30),
-                          ),
-                        ),
-                      ),
-                      if (existingPayment != null)
-                        ElevatedButton(
-                          onPressed: isLoading
-                              ? null
-                              : () {
-                            setState(() => isLoading = true);
-                            setState(() {
-                              _newPayments.removeAt(index!);
-                            });
-                            Navigator.pop(context);
-                            this.setState(() {}); // Refresh parent state
-                            setState(() => isLoading = false);
-                          },
-                          child: isLoading
-                              ? LoadingAnimationWidget.staggeredDotsWave(
-                            color: Colors.red,
-                            size: 24,
-                          )
-                              : const Text('Delete', style: TextStyle(color: Colors.white)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                ],
-              ),
+                );
+              },
             );
           },
         );
       },
-    ).then((_) {
-      _updatePaymentTimestamp();
+    ).then((_) => _updatePaymentTimestamp());
+  }
+
+  void _calculateDiscounts() async {
+    final services = List<Map<String, dynamic>>.from(widget.invoice['services'] ?? []);
+    int gamesTotal = 0;
+    int foodTotal = 0;
+
+    // Calculate totals for games and food services
+    for (var service in services) {
+      final type = service['type'] as String?;
+      final price = (service['details']?['price'] as num?)?.toInt() ?? 0;
+      if (['pool_hour', 'pool_coin', 'rental'].contains(type)) {
+        gamesTotal += price;
+      } else if (type == 'food') {
+        foodTotal += price;
+      }
+    }
+
+    // Fetch discount codes
+    final discountCodes = await FirebaseFirestore.instance
+        .collection('clubs')
+        .doc(widget.clubId)
+        .collection('discount_codes')
+        .where('is_active', isEqualTo: true)
+        .get()
+        .then((snapshot) => snapshot.docs.map((doc) => {
+      'id': doc.id,
+      ...doc.data(),
+    }).toList());
+
+    // Calculate discounts
+    setState(() {
+      _discountAmounts['games'] = 0;
+      _discountAmounts['food'] = 0;
+
+      if (_selectedDiscountCodes['games'] != null) {
+        final code = discountCodes.firstWhere(
+              (c) => c['id'] == _selectedDiscountCodes['games'] && c['discount_type'] == 'Games',
+          orElse: () => {},
+        );
+        if (code.isNotEmpty) {
+          _discountAmounts['games'] = ((gamesTotal * (code['discount_value'] as num? ?? 0) / 100)).round();
+        }
+      }
+
+      if (_selectedDiscountCodes['food'] != null) {
+        final code = discountCodes.firstWhere(
+              (c) => c['id'] == _selectedDiscountCodes['food'] && c['discount_type'] == 'Food',
+          orElse: () => {},
+        );
+        if (code.isNotEmpty) {
+          _discountAmounts['food'] = ((foodTotal * (code['discount_value'] as num? ?? 0) / 100)).round();
+        }
+      }
     });
   }
 
@@ -1138,104 +1371,114 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
 
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setState) {
-            final enteredStars = int.tryParse(controller.text) ?? 0;
+        return DraggableScrollableSheet(
+          initialChildSize: 0.66,
+          minChildSize: 0.3,
+          maxChildSize: 0.9,
+          expand: false,
+          builder: (context, scrollController) {
             return Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Current Stars: $currentStars',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Use Stars (1 Star = 1 tk, Min 100 tk)',
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              child: SingleChildScrollView(
+                controller: scrollController,
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('Amount (Stars):', style: TextStyle(fontSize: 16)),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: TextField(
-                          controller: controller,
-                          keyboardType: TextInputType.number,
-                          autofocus: true,
-                          textInputAction: TextInputAction.done,
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
+                      Text(
+                        'Current Stars: $currentStars',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Use Stars (1 Star = 1 tk, Min 100 tk)',
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          const Text('Amount (Stars):', style: TextStyle(fontSize: 16)),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: TextField(
+                              controller: controller,
+                              keyboardType: TextInputType.number,
+                              autofocus: true,
+                              textInputAction: TextInputAction.done,
+                              decoration: const InputDecoration(
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: isLoading
+                              ? null
+                              : () {
+                            final enteredStars = int.tryParse(controller.text) ?? 0;
+                            if (enteredStars >= 100 && enteredStars <= currentStars) {
+                              setState(() => isLoading = true);
+                              final grossTotal = (widget.invoice['gross_total'] as num? ?? 0).toInt();
+                              final discountAmount = _discountAmounts['games']! + _discountAmounts['food']!;
+                              final roundUpAmount = _newPayments
+                                  .where((p) => p['method'] == 'RoundUp')
+                                  .fold(0, (sum, p) => sum + (p['amount'] as num?)!.toInt());
+                              final netTotal = grossTotal - discountAmount - roundUpAmount; // Deduct round_up
+                              final newTotalPaid = _newPayments
+                                  .where((p) => p['method'] != 'RoundUp')
+                                  .fold(0, (sum, p) => sum + (p['amount'] as num?)!.toInt()) +
+                                  enteredStars;
+                              final remaining = netTotal - newTotalPaid;
+
+                              setState(() {
+                                _newPayments.add({
+                                  'method': 'Stars',
+                                  'amount': enteredStars,
+                                  'timestamp': Timestamp.now(),
+                                });
+                              });
+
+                              FirebaseFirestore.instance
+                                  .collection('players')
+                                  .doc(widget.invoice['player_id'])
+                                  .update({'stars': currentStars - enteredStars});
+
+                              if (remaining <= 0) {
+                                _saveInvoice();
+                              } else {
+                                Navigator.pop(context);
+                              }
+                              setState(() => isLoading = false);
+                            }
+                          },
+                          child: isLoading
+                              ? LoadingAnimationWidget.staggeredDotsWave(
+                            color: Colors.yellow,
+                            size: 24,
+                          )
+                              : const Text('Apply Stars', style: TextStyle(color: Colors.white)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.yellow,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
                           ),
                         ),
                       ),
+                      const SizedBox(height: 20),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: isLoading
-                          ? null
-                          : enteredStars >= 100 && enteredStars <= currentStars
-                          ? () async {
-                        setState(() => isLoading = true);
-                        final total =
-                        (widget.invoice['total_amount'] as num? ?? 0).toDouble();
-                        final discountAmount = (widget.invoice['discount_amount']
-                        as num?)
-                            ?.toDouble() ??
-                            0.0;
-                        final discountedTotal = total - discountAmount;
-                        final newTotalPaid = _newPayments.fold(
-                            0.0, (sum, p) => sum + p['amount']) +
-                            enteredStars;
-                        final remaining = discountedTotal - newTotalPaid;
-
-                        setState(() {
-                          _newPayments.add({
-                            'method': 'Stars',
-                            'amount': enteredStars.toDouble(),
-                            'timestamp': Timestamp.now(),
-                          });
-                          currentStars -= enteredStars;
-                        });
-
-                        await FirebaseFirestore.instance
-                            .collection('players')
-                            .doc(widget.invoice['player_id'])
-                            .update({'stars': currentStars});
-
-                        if (remaining <= 0) {
-                          _saveInvoice();
-                        } else {
-                          Navigator.pop(context);
-                        }
-                        setState(() => isLoading = false);
-                      }
-                          : null,
-                      child: isLoading
-                          ? LoadingAnimationWidget.staggeredDotsWave(
-                        color: Colors.yellow,
-                        size: 24,
-                      )
-                          : const Text('Apply Stars', style: TextStyle(color: Colors.white)),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.yellow,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                ],
+                ),
               ),
             );
           },
@@ -1253,24 +1496,18 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
         return 0;
       }
 
-      final playerDoc =
-      await FirebaseFirestore.instance.collection('players').doc(playerId).get();
+      final playerDoc = await FirebaseFirestore.instance.collection('players').doc(playerId).get();
       if (playerDoc.exists) {
         setState(() => isLoading = false);
         return (playerDoc.data()?['stars'] as num?)?.toInt() ?? 0;
       } else {
-        await FirebaseFirestore.instance
-            .collection('players')
-            .doc(playerId)
-            .set({'stars': 0});
+        await FirebaseFirestore.instance.collection('players').doc(playerId).set({'stars': 0});
         setState(() => isLoading = false);
         return 0;
       }
     } catch (e) {
       setState(() => isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error fetching stars: $e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error fetching stars: $e')));
       return 0;
     }
   }
@@ -1281,75 +1518,103 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
 
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Round Up Amount (Max 100 tk)',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  const Text('Amount (tk):', style: TextStyle(fontSize: 16)),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: TextField(
-                      controller: controller,
-                      keyboardType: TextInputType.number,
-                      autofocus: true,
-                      textInputAction: TextInputAction.done,
-                      decoration: const InputDecoration(
-                        border: OutlineInputBorder(),
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setSheetState) {
+            return DraggableScrollableSheet(
+              initialChildSize: 0.55,
+              minChildSize: 0.4,
+              maxChildSize: 1.0,
+              expand: false,
+              builder: (context, scrollController) {
+                return SafeArea(
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).viewInsets.bottom,
+                      left: 20,
+                      right: 20,
+                      top: 20,
+                    ),
+                    child: SingleChildScrollView(
+                      controller: scrollController,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            'Round Up Amount (Max 100 tk)',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              const Text('Amount (tk):', style: TextStyle(fontSize: 16)),
+                              const SizedBox(width: 16),
+                              Expanded(
+                                child: TextField(
+                                  controller: controller,
+                                  keyboardType: TextInputType.number,
+                                  autofocus: true,
+                                  textInputAction: TextInputAction.done,
+                                  decoration: const InputDecoration(
+                                    border: OutlineInputBorder(),
+                                    hintText: 'Enter amount',
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: isLoading
+                                  ? null
+                                  : () async {
+                                setSheetState(() => isLoading = true);
+                                final roundUp = int.tryParse(controller.text) ?? 0;
+                                if (roundUp > 0 && roundUp <= 100) {
+                                  setState(() {
+                                    _newPayments.add({
+                                      'method': 'RoundUp',
+                                      'amount': roundUp,
+                                      'timestamp': Timestamp.now(),
+                                    });
+                                  });
+                                  Navigator.pop(context);
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Enter amount between 1 and 100')),
+                                  );
+                                }
+                                setSheetState(() => isLoading = false);
+                              },
+                              child: isLoading
+                                  ? LoadingAnimationWidget.staggeredDotsWave(
+                                color: Colors.orange,
+                                size: 24,
+                              )
+                                  : const Text('Apply Round Up', style: TextStyle(color: Colors.white)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(30),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                        ],
                       ),
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: isLoading
-                      ? null
-                      : () {
-                    setState(() => isLoading = true);
-                    final roundUp = double.tryParse(controller.text) ?? 0.0;
-                    if (roundUp > 0 && roundUp <= 100) {
-                      setState(() {
-                        _newPayments.add({
-                          'method': 'RoundUp',
-                          'amount': roundUp,
-                          'timestamp': Timestamp.now(),
-                        });
-                      });
-                      Navigator.pop(context);
-                    }
-                    setState(() => isLoading = false);
-                  },
-                  child: isLoading
-                      ? LoadingAnimationWidget.staggeredDotsWave(
-                    color: Colors.orange,
-                    size: 24,
-                  )
-                      : const Text('Apply Round Up', style: TextStyle(color: Colors.white)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
+                );
+              },
+            );
+          },
         );
       },
     ).then((_) => _updatePaymentTimestamp());
@@ -1368,22 +1633,28 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
 
   void _saveInvoice() async {
     setState(() => isLoading = true);
-    double newPaymentAmount = _newPayments.fold(0.0, (sum, p) => sum + (p['amount'] as num?)!.toDouble() ?? 0.0);
-    double previousPaidAmount = (widget.invoice['paid_amount'] as num?)?.toDouble() ?? 0.0;
-    double totalPaid = previousPaidAmount + newPaymentAmount;
-    double total = (widget.invoice['total_amount'] as num? ?? 0).toDouble();
-    double discountedTotal = total - _discountAmount;
+    int newPaymentAmount = _newPayments
+        .where((p) => p['method'] != 'RoundUp')
+        .fold(0, (sum, p) => sum + (p['amount'] as num?)!.toInt());
+    int previousPaidAmount = (widget.invoice['paid_amount'] as num?)?.toInt() ?? 0;
+    int totalPaid = previousPaidAmount + newPaymentAmount;
+    int grossTotal = (widget.invoice['gross_total'] as num? ?? 0).toInt();
+    int totalDiscount = _discountAmounts['games']! + _discountAmounts['food']!;
+    int roundUpAmount = _newPayments
+        .where((p) => p['method'] == 'RoundUp')
+        .fold(0, (sum, p) => sum + (p['amount'] as num?)!.toInt());
+    int netTotal = grossTotal - totalDiscount - roundUpAmount; // Deduct round_up
+    int payableAmount = netTotal;
 
-    num starsEarned = newPaymentAmount >= 50 ? (newPaymentAmount / 100).floor() : 0;
+    int starsEarned = newPaymentAmount >= 50 ? (newPaymentAmount ~/ 100) : 0;
     int currentStars = await _fetchOrCreatePlayerStars();
     await FirebaseFirestore.instance
         .collection('players')
         .doc(widget.invoice['player_id'])
         .update({'stars': currentStars + starsEarned});
 
-    String newStatus = totalPaid >= discountedTotal ? 'paid' : totalPaid > 0 ? 'due' : 'unpaid';
+    String newStatus = totalPaid >= payableAmount ? 'paid' : totalPaid > 0 ? 'due' : 'unpaid';
 
-    // Save to payments subcollection for dashboard (excluding round-up)
     for (var payment in _newPayments) {
       if (payment['method'] != 'RoundUp') {
         await FirebaseFirestore.instance
@@ -1400,25 +1671,57 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
       }
     }
 
-    // Append new payments to existing payments
     List<Map<String, dynamic>> existingPayments =
     widget.invoice['payments'] != null ? List<Map<String, dynamic>>.from(widget.invoice['payments']) : [];
-    existingPayments.addAll(_newPayments);
+    existingPayments.addAll(_newPayments.where((p) => p['method'] != 'RoundUp'));
 
-    // Update invoice with current subcollection
     await FirebaseFirestore.instance
         .collection('clubs')
         .doc(widget.clubId)
         .collection('invoices')
         .doc(widget.invoice['id'])
         .update({
-      'paid_amount': totalPaid, // Set the total paid amount
+      'paid_amount': totalPaid,
       'status': newStatus,
-      'discount_amount': _discountAmount,
-      'discount_code': _selectedDiscountCode,
+      'discount_amounts': {
+        'games': _discountAmounts['games'],
+        'food': _discountAmounts['food'],
+      },
+      'discount_codes': {
+        'games': _selectedDiscountCodes['games'],
+        'food': _selectedDiscountCodes['food'],
+      },
+      'discount_amount': totalDiscount,
+      'round_up': roundUpAmount,
+      'gross_total': grossTotal,
+      'net_total': netTotal,
       'stars_earned': FieldValue.increment(starsEarned),
       'paymentUpdateTimestamp': FieldValue.serverTimestamp(),
-      'payments': existingPayments, // Append new payments
+      'payments': existingPayments,
+      'date': widget.invoice['date'],
+    });
+
+    await FirebaseFirestore.instance
+        .collection('players')
+        .doc(widget.invoice['player_id'])
+        .collection('invoices')
+        .doc(widget.invoice['id'])
+        .update({
+      'date': widget.invoice['date'],
+      'gross_total': grossTotal,
+      'net_total': netTotal,
+      'paid_amount': totalPaid,
+      'status': newStatus,
+      'discount_amount': totalDiscount,
+      'discount_amounts': {
+        'games': _discountAmounts['games'],
+        'food': _discountAmounts['food'],
+      },
+      'discount_codes': {
+        'games': _selectedDiscountCodes['games'],
+        'food': _selectedDiscountCodes['food'],
+      },
+      'round_up': roundUpAmount,
     });
 
     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Invoice saved successfully')));
@@ -1426,60 +1729,108 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
     setState(() => isLoading = false);
   }
 
-  Widget _buildInvoiceCard(double total, double discountedTotal, double totalPaid, double remaining, double change) {
-    double roundUpAmount = _newPayments.where((p) => p['method'] == 'RoundUp').fold(0.0, (sum, p) => sum + (p['amount'] as num?)!.toDouble() ?? 0.0);
-    remaining = discountedTotal - totalPaid; // Correct remaining amount
-    change = totalPaid - discountedTotal;
+  Widget _buildInvoiceCard(int grossTotal, int netTotal, int totalPaid, int remaining, int change) {
+    int roundUpAmount = _newPayments
+        .where((p) => p['method'] == 'RoundUp')
+        .fold(0, (sum, p) => sum + (p['amount'] as num?)!.toInt());
+    int totalDiscount = _discountAmounts['games']! + _discountAmounts['food']!;
+    netTotal = grossTotal - totalDiscount - roundUpAmount; // Deduct round_up
+    int payableAmount = netTotal;
+    remaining = payableAmount - totalPaid;
+    change = totalPaid > payableAmount ? totalPaid - payableAmount : 0;
 
     final invoiceDate = (widget.invoice['date'] as Timestamp?)?.toDate() ?? DateTime.now();
     final paymentUpdateDate = (widget.invoice['paymentUpdateTimestamp'] as Timestamp?)?.toDate() ?? invoiceDate;
-    final formattedInvoiceDate = '${invoiceDate.day.toString().padLeft(2, '0')}/${invoiceDate.month.toString().padLeft(2, '0')}/${invoiceDate.year}';
-    final formattedPaymentUpdateDate = '${paymentUpdateDate.day.toString().padLeft(2, '0')}/${paymentUpdateDate.month.toString().padLeft(2, '0')}/${paymentUpdateDate.year}';
+    final formattedInvoiceDate =
+        '${invoiceDate.day.toString().padLeft(2, '0')}/${invoiceDate.month.toString().padLeft(2, '0')}/${invoiceDate.year}';
+    final formattedPaymentUpdateDate =
+        '${paymentUpdateDate.day.toString().padLeft(2, '0')}/${paymentUpdateDate.month.toString().padLeft(2, '0')}/${paymentUpdateDate.year}';
 
-    // Combine existing and new payments for display
     List<Map<String, dynamic>> allPayments =
     widget.invoice['payments'] != null ? List<Map<String, dynamic>>.from(widget.invoice['payments']) : [];
-    allPayments.addAll(_newPayments);
+    allPayments.addAll(_newPayments.where((p) => p['method'] != 'RoundUp'));
 
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Invoice Details', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            Text('Invoice No: ${widget.invoice['id']}', style: const TextStyle(fontSize: 16)),
-            Text('Invoice Date: $formattedInvoiceDate', style: const TextStyle(fontSize: 16)),
-            Text('Last Payment Update: $formattedPaymentUpdateDate', style: const TextStyle(fontSize: 16)),
-            Text('Sub Total: ৳${total.toStringAsFixed(0)}', style: const TextStyle(fontSize: 16)),
-            if (_discountAmount > 0) Text('Discount: -৳${_discountAmount.toStringAsFixed(0)}', style: const TextStyle(color: Colors.green, fontSize: 16)),
-            if (totalPaid > 0) Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Paid: ৳${totalPaid.toStringAsFixed(0)}', style: const TextStyle(fontSize: 16, color: Colors.grey)),
-              if (allPayments.isNotEmpty) Column(children: allPayments.asMap().entries.map((entry) {
-                final index = entry.key;
-                final p = entry.value;
-                return ListTile(
-                  title: Text('${p['method']}: ৳${p['amount'].toStringAsFixed(0)}', style: const TextStyle(fontSize: 14)),
-                  trailing: index >= (widget.invoice['payments']?.length ?? 0)
-                      ? IconButton(
-                      icon: const Icon(Icons.edit, color: Colors.blue),
-                      onPressed: () => _showPaymentBottomSheet(p['method'], index: (index - (widget.invoice['payments']?.length ?? 0)) as int?))
-                      : null,
-                );
-              }).toList()),
-            ]),
-            const Divider(height: 20),
-            Text('Total Payable: ৳${discountedTotal.toStringAsFixed(0)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            if (remaining > 0 && remaining <= 100) Padding(padding: const EdgeInsets.only(top: 10), child: Row(children: [
-              Text('Now Payable: ৳${remaining.toStringAsFixed(0)}', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red)),
-              const SizedBox(width: 8),
-              ElevatedButton(onPressed: isLoading ? null : _showRoundUpSheet, style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)), child: isLoading ? LoadingAnimationWidget.staggeredDotsWave(color: Colors.white, size: 24) : const Text('Round Up', style: TextStyle(color: Colors.white))),
-            ])),
-            if (remaining < 0) Text('Change to return: ৳${(-remaining).toStringAsFixed(0)}', style: const TextStyle(fontSize: 16, color: Colors.green, fontWeight: FontWeight.bold)),
-          ],
+    return SizedBox(
+      width: double.infinity,
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Invoice Details', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              Text('Invoice No: ${widget.invoice['id']}', style: const TextStyle(fontSize: 16)),
+              Text('Invoice Date: $formattedInvoiceDate', style: const TextStyle(fontSize: 16)),
+              Text('Last Payment Update: $formattedPaymentUpdateDate', style: const TextStyle(fontSize: 16)),
+              Text('Gross Total: ৳$grossTotal', style: const TextStyle(fontSize: 16)),
+              if (_discountAmounts['games']! > 0)
+                Text('Games Discount: -৳${_discountAmounts['games']!}',
+                    style: const TextStyle(color: Colors.green, fontSize: 16)),
+              if (_discountAmounts['food']! > 0)
+                Text('Food Discount: -৳${_discountAmounts['food']!}',
+                    style: const TextStyle(color: Colors.green, fontSize: 16)),
+              if (roundUpAmount > 0)
+                Text('Round Up: -৳$roundUpAmount', style: const TextStyle(color: Colors.orange, fontSize: 16)), // Deduct
+              Text('Net Total: ৳$netTotal', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              if (totalPaid > 0)
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Paid: ৳$totalPaid', style: const TextStyle(fontSize: 16, color: Colors.grey)),
+                    if (allPayments.isNotEmpty)
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: allPayments.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final p = entry.value;
+                          return ListTile(
+                            title: Text('${p['method']}: ৳${(p['amount'] as num).toInt()}',
+                                style: const TextStyle(fontSize: 14)),
+                            trailing: index >= (widget.invoice['payments']?.length ?? 0)
+                                ? IconButton(
+                                icon: const Icon(Icons.edit, color: Colors.blue),
+                                onPressed: () => _showPaymentBottomSheet(
+                                    p['method'], index: (index - (widget.invoice['payments']?.length ?? 0)) as int?))
+                                : null,
+                          );
+                        }).toList(),
+                      ),
+                  ],
+                ),
+              const Divider(height: 20),
+              Text('Total Payable: ৳$payableAmount',
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              if (remaining > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Row(
+                    children: [
+                      Text('Now Payable: ৳$remaining',
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red)),
+                      if (remaining <= 100) ...[
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: isLoading ? null : _showRoundUpSheet,
+                          style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+                          child: isLoading
+                              ? LoadingAnimationWidget.staggeredDotsWave(color: Colors.white, size: 24)
+                              : const Text('Round Up', style: TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              if (change > 0)
+                Text('Change to return: ৳$change',
+                    style: const TextStyle(fontSize: 16, color: Colors.green, fontWeight: FontWeight.bold)),
+            ],
+          ),
         ),
       ),
     );
@@ -1515,17 +1866,28 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final total = (widget.invoice['total_amount'] as num? ?? 0).toDouble();
-    final discountAmount = (widget.invoice['discount_amount'] as num?)?.toDouble() ?? _discountAmount;
-    final discountedTotal = total - discountAmount;
-    double previousPaidAmount = (widget.invoice['paid_amount'] as num?)?.toDouble() ?? 0.0;
-    double newPaymentAmount = _newPayments.fold(0.0, (sum, p) => sum + (p['amount'] as num?)!.toDouble() ?? 0.0);
-    double totalPaid = previousPaidAmount + newPaymentAmount; // Correct total paid
-    double remaining = discountedTotal - totalPaid;
-    double change = totalPaid - discountedTotal;
+    final grossTotal = (widget.invoice['gross_total'] as num? ?? 0).toInt();
+    final totalDiscount = _discountAmounts['games']! + _discountAmounts['food']!;
+    final roundUpAmount = _newPayments
+        .where((p) => p['method'] == 'RoundUp')
+        .fold(0, (sum, p) => sum + (p['amount'] as num?)!.toInt());
+    final netTotal = grossTotal - totalDiscount - roundUpAmount;
+    final payableAmount = netTotal;
+    final previousPaidAmount = (widget.invoice['paid_amount'] as num?)?.toInt() ?? 0;
+    final newPaymentAmount = _newPayments
+        .where((p) => p['method'] != 'RoundUp')
+        .fold(0, (sum, p) => sum + (p['amount'] as num?)!.toInt());
+    final totalPaid = previousPaidAmount + newPaymentAmount;
+    final remaining = payableAmount - totalPaid;
+    final change = totalPaid > payableAmount ? totalPaid - payableAmount : 0;
 
-    final status = widget.invoice['status'] as String? ?? 'unknown';
-    final isDiscountApplicable = status == 'unpaid' && !(_discountAmount > 0 || _selectedDiscountCode != null);
+    final status = widget.invoice['status'] as String? ?? 'unpaid';
+    final bool isPracticeMode = widget.invoice['practice_mode'] as bool? ?? false;
+    final isDiscountApplicable =
+        status == 'unpaid' && !(_discountAmount > 0 || _selectedDiscountCode != null) && !isPracticeMode;
+
+    // CHANGED: Allow Save if there is any new payment OR remaining <= 0 (can settle with zero new payment)
+    final canSaveInvoice = !isLoading && (newPaymentAmount > 0 || remaining <= 0);
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
@@ -1545,23 +1907,41 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildInvoiceCard(total, discountedTotal, totalPaid, remaining, change),
+            _buildInvoiceCard(grossTotal, netTotal, totalPaid, remaining, change),
             const SizedBox(height: 16),
             Row(
               children: [
-                Expanded(child: ElevatedButton.icon(
-                  onPressed: isDiscountApplicable ? () => _showDiscountSheet() : null,
-                  icon: const Icon(Icons.percent, color: Colors.red),
-                  style: ElevatedButton.styleFrom(backgroundColor: !isDiscountApplicable ? Colors.grey : Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), side: const BorderSide(color: Colors.red)),
-                  label: const Text('Add Discount', style: TextStyle(fontSize: 16, color: Colors.red)),
-                )),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: isDiscountApplicable ? () => _showDiscountSheet() : null,
+                    icon: const Icon(Icons.percent, color: Colors.red),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: isDiscountApplicable ? Colors.white : Colors.grey,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(color: Colors.red),
+                    ),
+                    label: const Text(
+                      'Add Discount',
+                      style: TextStyle(fontSize: 16, color: Colors.red),
+                    ),
+                  ),
+                ),
                 const SizedBox(width: 12),
-                Expanded(child: ElevatedButton.icon(
-                  onPressed: isLoading ? null : _showStarsSheet,
-                  icon: const Icon(Icons.star, color: Colors.red),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), side: const BorderSide(color: Colors.red)),
-                  label: const Text('Use Stars', style: TextStyle(fontSize: 16, color: Colors.red)),
-                )),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: isLoading ? null : _showStarsSheet,
+                    icon: const Icon(Icons.star, color: Colors.red),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(color: Colors.red),
+                    ),
+                    label: const Text(
+                      'Use Stars',
+                      style: TextStyle(fontSize: 16, color: Colors.red),
+                    ),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -1580,9 +1960,14 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: isLoading || newPaymentAmount == 0 ? null : _saveInvoice,
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.white60, padding: const EdgeInsets.symmetric(vertical: 16)),
-                child: isLoading ? LoadingAnimationWidget.staggeredDotsWave(color: Colors.black, size: 24) : const Text('Save Invoice', style: TextStyle(fontSize: 16)),
+                onPressed: canSaveInvoice ? _saveInvoice : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white60,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                ),
+                child: isLoading
+                    ? LoadingAnimationWidget.staggeredDotsWave(color: Colors.black, size: 24)
+                    : const Text('Save Invoice', style: TextStyle(fontSize: 16)),
               ),
             ),
           ],

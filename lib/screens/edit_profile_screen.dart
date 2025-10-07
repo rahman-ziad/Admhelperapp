@@ -21,10 +21,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _nameController = TextEditingController();
   final _clubNameController = TextEditingController();
   final _tableCountController = TextEditingController();
+  final _practiceDiscountController = TextEditingController();
   File? _imageFile;
   String? _existingLogoUrl;
-  bool _isLoading = true; // For shimmer during initial load
-  bool _isSubmitting = false; // For button loading state
+  bool _isLoading = true;
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -35,20 +36,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _loadProfile() async {
     try {
       final user = FirebaseAuth.instance.currentUser!;
-      final userDoc =
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      final clubDoc =
-      await FirebaseFirestore.instance.collection('clubs').doc(widget.clubId).get();
+      final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final clubDoc = await FirebaseFirestore.instance.collection('clubs').doc(widget.clubId).get();
       if (userDoc.exists) {
         _nameController.text = userDoc['name'] ?? '';
       }
       if (clubDoc.exists) {
         _clubNameController.text = clubDoc['name'] ?? '';
         _tableCountController.text = clubDoc['table_count']?.toString() ?? '';
+        _practiceDiscountController.text = clubDoc['practice_mode_discount_percentage']?.toString() ?? '';
         _existingLogoUrl = clubDoc['logo_url'];
       }
     } catch (e) {
-      print('Error loading profile: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading profile: $e')),
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -69,6 +71,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // Check if any field is empty
+    if (_nameController.text.trim().isEmpty ||
+        _clubNameController.text.trim().isEmpty ||
+        _tableCountController.text.trim().isEmpty ||
+        _practiceDiscountController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All fields must have a value')),
+      );
+      return;
+    }
+
     setState(() {
       _isSubmitting = true;
     });
@@ -77,10 +90,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     try {
       String? logoUrl = _existingLogoUrl;
       if (_imageFile != null) {
-        final storageRef =
-        FirebaseStorage.instance.ref().child('club_logos/${user.uid}');
+        final storageRef = FirebaseStorage.instance.ref().child('club_logos/${user.uid}');
         await storageRef.putFile(_imageFile!);
         logoUrl = await storageRef.getDownloadURL();
+      }
+
+      double? practiceDiscount;
+      if (_practiceDiscountController.text.isNotEmpty) {
+        practiceDiscount = double.tryParse(_practiceDiscountController.text);
       }
 
       await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
@@ -91,6 +108,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'name': _clubNameController.text.trim(),
         'logo_url': logoUrl,
         'table_count': int.parse(_tableCountController.text.trim()),
+        'practice_mode_discount_percentage': practiceDiscount,
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -186,8 +204,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             ),
                             prefixIcon: Icon(Icons.person, color: Colors.red),
                           ),
-                          validator: (value) =>
-                          value!.isEmpty ? 'Enter your name' : null,
+                          validator: (value) => value!.isEmpty ? 'Enter your name' : null,
                         ),
                         const SizedBox(height: 16),
                         TextFormField(
@@ -200,8 +217,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             ),
                             prefixIcon: Icon(Icons.store, color: Colors.red),
                           ),
-                          validator: (value) =>
-                          value!.isEmpty ? 'Enter club name' : null,
+                          validator: (value) => value!.isEmpty ? 'Enter club name' : null,
                         ),
                         const SizedBox(height: 16),
                         TextFormField(
@@ -219,6 +235,26 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             if (value!.isEmpty) return 'Enter number of tables';
                             if (int.tryParse(value) == null || int.parse(value) <= 0)
                               return 'Enter a valid positive integer';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _practiceDiscountController,
+                          decoration: InputDecoration(
+                            labelText: 'Practice Mode Discount (%)',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Colors.redAccent),
+                            ),
+                            prefixIcon: Icon(Icons.discount, color: Colors.green),
+                          ),
+                          keyboardType: TextInputType.number,
+                          validator: (value) {
+                            if (value!.isEmpty) return null; // Validation handled in _submit
+                            final discount = double.tryParse(value);
+                            if (discount == null || discount < 0 || discount > 100)
+                              return 'Enter a valid percentage (0-100)';
                             return null;
                           },
                         ),
@@ -275,6 +311,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _nameController.dispose();
     _clubNameController.dispose();
     _tableCountController.dispose();
+    _practiceDiscountController.dispose();
     super.dispose();
   }
 }

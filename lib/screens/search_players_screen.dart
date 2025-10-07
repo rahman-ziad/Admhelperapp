@@ -64,13 +64,17 @@ class _SearchPlayersScreenState extends State<SearchPlayersScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(12),
             child: TextField(
               controller: _searchController,
-              decoration: const InputDecoration(
-                labelText: 'Search by Name, Phone, or IGN',
-                prefixIcon: Icon(Icons.search),
+              decoration: InputDecoration(
+                hintText: 'Search by Name, IGN, or Phone',
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
+              onChanged: (_) => _searchPlayers(),
             ),
           ),
           Expanded(
@@ -80,37 +84,22 @@ class _SearchPlayersScreenState extends State<SearchPlayersScreen> {
               itemCount: _filteredPlayers.length,
               itemBuilder: (context, index) {
                 final player = _filteredPlayers[index];
+                final playerName = player['name'] ?? 'Unknown';
+                final playerIGN = player['in_game_name'] ?? 'N/A';
+                final playerPhone = player['phone_number'] ?? 'N/A';
+                final photoUrl = player['image_url'] ?? '';
+                final nameAndIGN = '$playerName ($playerIGN)';
+                final truncatedNameAndIGN = nameAndIGN.length > 20
+                    ? '${nameAndIGN.substring(0, 17)}...'
+                    : nameAndIGN;
+
                 return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  child: ListTile(
-                    leading: player['image_url'] != null
-                        ? CircleAvatar(
-                      backgroundImage: NetworkImage(player['image_url']),
-                      radius: 20,
-                    )
-                        : const Icon(Icons.person, size: 40),
-                    title: Text(
-                      '${player['name'] ?? 'Unknown'} (${player['in_game_name'] ?? 'N/A'})',
-                    ),
-                    subtitle: Text('Phone: ${player['phone_number'] ?? 'N/A'}'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit, color: Colors.blue),
-                          onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => EditPlayerScreen(
-                                clubId: widget.clubId,
-                                player: player,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const Icon(Icons.check),
-                      ],
-                    ),
+                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 4,
+                  child: GestureDetector(
                     onTap: () {
                       try {
                         Navigator.pop(context);
@@ -123,6 +112,61 @@ class _SearchPlayersScreenState extends State<SearchPlayersScreen> {
                         }
                       }
                     },
+                    child: Container(
+                      height: 90,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Row(
+                        children: [
+                          photoUrl.isNotEmpty
+                              ? CircleAvatar(
+                            radius: 30,
+                            backgroundImage: NetworkImage(photoUrl),
+                          )
+                              : CircleAvatar(
+                            radius: 30,
+                            backgroundColor: Colors.blue.shade200,
+                            child: Text(
+                              playerName.isNotEmpty ? playerName[0].toUpperCase() : '?',
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  truncatedNameAndIGN,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                                ),
+                                Text(
+                                  playerPhone,
+                                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          IconButton(
+                            icon: const Icon(Icons.edit, color: Colors.blue),
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => EditPlayerScreen(
+                                  clubId: widget.clubId,
+                                  player: player,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 );
               },

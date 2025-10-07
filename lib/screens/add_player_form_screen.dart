@@ -27,14 +27,31 @@ class _AddPlayerFormScreenState extends State<AddPlayerFormScreen> {
   final _inGameNameController = TextEditingController();
   String _phoneNumber = '';
   File? _selectedImage;
-  String? _warningMessage;
-  bool _isLoading = true; // For initial loading
-  bool _isSaving = false; // For save button loading
+  String? _phoneWarningMessage;
+  String? _ignWarningMessage;
+  bool _isLoading = true;
+  bool _isSaving = false;
 
   Future<bool> _checkPhoneAvailability(String phoneNumber) async {
     final querySnapshot = await FirebaseFirestore.instance
         .collection('players')
         .where('phone_number', isEqualTo: phoneNumber.trim())
+        .get();
+    return querySnapshot.docs.isNotEmpty;
+  }
+  String _capitalizeWords(String text) {
+    if (text.isEmpty) return text;
+    return text
+        .split(' ')
+        .map((word) => word.isNotEmpty
+        ? '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}'
+        : word)
+        .join(' ');
+  }
+  Future<bool> _checkIGNAvailability(String ign) async {
+    final querySnapshot = await FirebaseFirestore.instance
+        .collection('players')
+        .where('in_game_name', isEqualTo: ign.trim())
         .get();
     return querySnapshot.docs.isNotEmpty;
   }
@@ -100,6 +117,8 @@ class _AddPlayerFormScreenState extends State<AddPlayerFormScreen> {
 
     setState(() {
       _isSaving = true;
+      _phoneWarningMessage = null;
+      _ignWarningMessage = null;
     });
 
     try {
@@ -119,6 +138,17 @@ class _AddPlayerFormScreenState extends State<AddPlayerFormScreen> {
         return;
       }
 
+      final isPhoneTaken = await _checkPhoneAvailability(_phoneNumber);
+      final isIGNTaken = await _checkIGNAvailability(_inGameNameController.text);
+
+      if (isPhoneTaken || isIGNTaken) {
+        setState(() {
+          _phoneWarningMessage = isPhoneTaken ? 'Phone number already registered!' : null;
+          _ignWarningMessage = isIGNTaken ? 'In-Game Name already taken!' : null;
+        });
+        return;
+      }
+
       String? imageUrl;
       if (_selectedImage != null) {
         final playerId = FirebaseFirestore.instance.collection('players').doc().id;
@@ -128,9 +158,9 @@ class _AddPlayerFormScreenState extends State<AddPlayerFormScreen> {
       }
 
       final playerData = {
-        'name': _nameController.text.trim(),
+        'name': _capitalizeWords(_nameController.text.trim()),
         'phone_number': _phoneNumber.trim(),
-        'in_game_name': _inGameNameController.text.trim(),
+        'in_game_name': _capitalizeWords(_inGameNameController.text.trim()),
         'image_url': imageUrl,
       };
 
@@ -141,7 +171,6 @@ class _AddPlayerFormScreenState extends State<AddPlayerFormScreen> {
       );
       Navigator.pop(context);
     } catch (e) {
-      print('Error saving player: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to add player: $e')),
       );
@@ -155,7 +184,6 @@ class _AddPlayerFormScreenState extends State<AddPlayerFormScreen> {
   @override
   void initState() {
     super.initState();
-    // Simulate initial loading (e.g., fetching data if needed)
     Future.delayed(const Duration(seconds: 1), () {
       if (mounted) setState(() => _isLoading = false);
     });
@@ -220,12 +248,26 @@ class _AddPlayerFormScreenState extends State<AddPlayerFormScreen> {
                       _phoneNumber = phone.completeNumber;
                       final isTaken = await _checkPhoneAvailability(_phoneNumber);
                       setState(() {
-                        _warningMessage = isTaken ? 'Phone number already registered!' : null;
+                        _phoneWarningMessage = isTaken ? 'Phone number already registered!' : null;
                       });
                     },
                     validator: (phone) =>
                     phone == null || phone.number.isEmpty ? 'Enter phone number' : null,
                   ),
+                  if (_phoneWarningMessage != null)
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      margin: const EdgeInsets.only(bottom: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.red[100],
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: Colors.red),
+                      ),
+                      child: Text(
+                        _phoneWarningMessage!,
+                        style: const TextStyle(color: Colors.red, fontSize: 14),
+                      ),
+                    ),
                   const SizedBox(height: 10),
                   TextFormField(
                     controller: _nameController,
@@ -235,6 +277,15 @@ class _AddPlayerFormScreenState extends State<AddPlayerFormScreen> {
                       border: OutlineInputBorder(),
                     ),
                     validator: (value) => value!.isEmpty ? 'Enter player name' : null,
+                    onChanged: (value) {
+                      final capitalized = _capitalizeWords(value);
+                      if (value != capitalized) {
+                        _nameController.value = TextEditingValue(
+                          text: capitalized,
+                          selection: TextSelection.collapsed(offset: capitalized.length),
+                        );
+                      }
+                    },
                   ),
                   const SizedBox(height: 10),
                   TextFormField(
@@ -246,9 +297,21 @@ class _AddPlayerFormScreenState extends State<AddPlayerFormScreen> {
                     ),
                     maxLength: 10,
                     validator: (value) => value!.isEmpty ? 'Enter IGN' : null,
+                    onChanged: (value) async {
+                      final capitalized = _capitalizeWords(value);
+                      if (value != capitalized) {
+                        _inGameNameController.value = TextEditingValue(
+                          text: capitalized,
+                          selection: TextSelection.collapsed(offset: capitalized.length),
+                        );
+                      }
+                      final isTaken = await _checkIGNAvailability(capitalized);
+                      setState(() {
+                        _ignWarningMessage = isTaken ? 'In-Game Name already taken!' : null;
+                      });
+                    },
                   ),
-                  const SizedBox(height: 20),
-                  if (_warningMessage != null)
+                  if (_ignWarningMessage != null)
                     Container(
                       padding: const EdgeInsets.all(8),
                       margin: const EdgeInsets.only(bottom: 10),
@@ -258,10 +321,11 @@ class _AddPlayerFormScreenState extends State<AddPlayerFormScreen> {
                         border: Border.all(color: Colors.red),
                       ),
                       child: Text(
-                        _warningMessage!,
+                        _ignWarningMessage!,
                         style: const TextStyle(color: Colors.red, fontSize: 14),
                       ),
                     ),
+                  const SizedBox(height: 20),
                   ElevatedButton(
                     onPressed: _isSaving ? null : _savePlayer,
                     style: ElevatedButton.styleFrom(
@@ -293,7 +357,6 @@ class _AddPlayerFormScreenState extends State<AddPlayerFormScreen> {
   }
 }
 
-// Updated CapturePhotoScreen
 class CapturePhotoScreen extends StatefulWidget {
   final Function(File) onImageCaptured;
   final String phoneNumber;
