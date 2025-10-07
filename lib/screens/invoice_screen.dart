@@ -95,6 +95,14 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
     );
   }
 
+  String _formatPhoneNumber(String? phoneNumber) {
+    if (phoneNumber == null || phoneNumber.length < 10) {
+      return 'N/A';
+    }
+    // Take first 12 digits and append **
+    return '${phoneNumber.substring(0, phoneNumber.length > 12 ? 12 : phoneNumber.length)}**';
+  }
+
   @override
   Widget build(BuildContext context) {
     final invoicesAsync = ref.watch(invoicesProvider(widget.clubId));
@@ -264,7 +272,7 @@ class _InvoiceScreenState extends ConsumerState<InvoiceScreen> {
                                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                                     ),
                                     Text(
-                                      playerPhone,
+                                      _formatPhoneNumber(playerDetails[playerId]?['phone_number']),
                                       style: const TextStyle(fontSize: 12, color: Colors.grey),
                                     ),
                                   ],
@@ -486,6 +494,14 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     return '${hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')} $period';
   }
 
+  String _formatPhoneNumber(String? phoneNumber) {
+    if (phoneNumber == null || phoneNumber.length < 10) {
+      return 'N/A';
+    }
+    // Take first 12 digits and append **
+    return '${phoneNumber.substring(0, phoneNumber.length > 12 ? 12 : phoneNumber.length)}**';
+  }
+
   // In _InvoiceDetailScreenState.build
   @override
   Widget build(BuildContext context) {
@@ -558,7 +574,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                         style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       Text(
-                        '$playerPhoneNumber',
+                        _formatPhoneNumber(playerPhoneNumber),
                         style: const TextStyle(fontSize: 14, color: Colors.grey),
                       ),
 

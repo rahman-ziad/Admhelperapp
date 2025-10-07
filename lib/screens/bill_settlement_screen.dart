@@ -1753,8 +1753,8 @@ class _SearchPlayersScreenState extends State<SearchPlayersScreen> {
     if (phoneNumber == null || phoneNumber.length < 10) {
       return 'No number';
     }
-    // Take first 7 digits and append ***
-    return '${phoneNumber.substring(0, phoneNumber.length > 12 ? 12 : phoneNumber.length)}***';
+    // Take first 12 digits and append **
+    return '${phoneNumber.substring(0, phoneNumber.length > 12 ? 12 : phoneNumber.length)}**';
   }
 
   @override
