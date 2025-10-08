@@ -39,10 +39,10 @@ final userProfileProvider = StreamProvider.family<UserProfile?, String>((ref, ui
       .collection('users')
       .doc(uid)
       .snapshots()
-      .map((snapshot) {
+      .asyncMap((snapshot) async {
     if (!snapshot.exists) {
       // User document doesn't exist, sign out the user
-      FirebaseAuth.instance.signOut();
+      await FirebaseAuth.instance.signOut();
       return null;
     }
     return UserProfile.fromMap(snapshot.data()!);
