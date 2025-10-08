@@ -17,8 +17,13 @@ class HomeScreen extends ConsumerWidget {
     final profileAsync = ref.watch(userProfileProvider(user.uid));
     return profileAsync.when(
       data: (profile) {
-        // If profile doesn't exist or isProfileSetup is false, show ProfileSetupScreen
-        if (profile == null || !profile.isProfileSetup) {
+        // If profile is null, user was logged out (document deleted)
+        // The provider will handle the sign out, just show login screen
+        if (profile == null) {
+          return const LoginScreen();
+        }
+        // If profile exists but setup is not complete, show ProfileSetupScreen
+        if (!profile.isProfileSetup) {
           return const ProfileSetupScreen();
         }
         return MainHomeScreen(clubId: profile.clubId);
@@ -29,9 +34,19 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-final userProfileProvider = FutureProvider.family<UserProfile?, String>((ref, uid) async {
-  final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-  return doc.exists ? UserProfile.fromMap(doc.data()!) : null;
+final userProfileProvider = StreamProvider.family<UserProfile?, String>((ref, uid) {
+  return FirebaseFirestore.instance
+      .collection('users')
+      .doc(uid)
+      .snapshots()
+      .asyncMap((snapshot) async {
+    if (!snapshot.exists) {
+      // User document doesn't exist, sign out the user
+      await FirebaseAuth.instance.signOut();
+      return null;
+    }
+    return UserProfile.fromMap(snapshot.data()!);
+  });
 });
 
 class UserProfile {
