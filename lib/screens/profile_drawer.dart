@@ -30,18 +30,21 @@ class ProfileDrawer extends ConsumerWidget {
       child: profileAsync.when(
         data: (profile) {
           if (profile == null) {
-            return Center(
+            // Profile doesn't exist - user will be automatically logged out
+            // Show a message and navigate to login
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const AuthWrapper()),
+              );
+            });
+            return const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text('Profile not found'),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      ref.refresh(userProfileProvider(user.uid));
-                    },
-                    child: const Text('Retry'),
-                  ),
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Logging out...'),
                 ],
               ),
             );
