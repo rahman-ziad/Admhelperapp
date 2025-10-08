@@ -1828,17 +1828,15 @@ class _InvoicePaymentScreenState extends State<InvoicePaymentScreen> {
                     children: [
                       Text('Now Payable: ৳$remaining',
                           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.red)),
-                      if (remaining <= 100) ...[
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: isLoading ? null : _showRoundUpSheet,
-                          style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.orange, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
-                          child: isLoading
-                              ? LoadingAnimationWidget.staggeredDotsWave(color: Colors.white, size: 24)
-                              : const Text('Round Up', style: TextStyle(color: Colors.white)),
-                        ),
-                      ],
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: isLoading ? null : _showRoundUpSheet,
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.orange, padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4)),
+                        child: isLoading
+                            ? LoadingAnimationWidget.staggeredDotsWave(color: Colors.white, size: 24)
+                            : const Text('Round Up', style: TextStyle(color: Colors.white)),
+                      ),
                     ],
                   ),
                 ),
